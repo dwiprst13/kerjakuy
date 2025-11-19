@@ -7,17 +7,16 @@ import (
 	"gorm.io/gorm"
 )
 
-type Workspace struct {
+type Column struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	BoardID   uuid.UUID `gorm:"type:uuid;index" json:"board_id"`
 	Name      string    `gorm:"type:varchar(100)" json:"name"`
-	Slug      string    `gorm:"type:varchar(100);uniqueIndex" json:"slug"`
-	OwnerID   uuid.UUID `gorm:"type:uuid" json:"owner_id"`
-	Plan      string    `gorm:"type:varchar(50);default:free" json:"plan"`
+	Position  int       `gorm:"default:0" json:"position"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
-func (w *Workspace) BeforeCreate(tx *gorm.DB) error {
-	w.ID = uuid.New()
+func (c *Column) BeforeCreate(tx *gorm.DB) error {
+	c.ID = uuid.New()
 	return nil
 }

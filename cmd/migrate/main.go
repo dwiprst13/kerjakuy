@@ -33,7 +33,23 @@ func main() {
 	}
 
 	err = db.AutoMigrate(
+		&models.ActivityLog{},
+		&models.Attachment{},
+		&models.Board{},
+		&models.ChatChannel{},
+		&models.ChatChannelMember{},
+		&models.ChatMessage{},
+		&models.ChatMessageRead{},
+		&models.Column{},
+		&models.Notification{},
+		&models.Project{},
+		&models.TaskAssignee{},
+		&models.TaskComment{},
+		&models.Task{},
 		&models.User{},
+		&models.UserSession{},
+		&models.WorkspaceMember{},
+		&models.Workspace{},
 	)
 
 	if err != nil {

@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 	"github.com/joho/godotenv"
 
-	"project-management/internal/models"
+	"kerjakuy/internal/models"
 )
 
 func main() {

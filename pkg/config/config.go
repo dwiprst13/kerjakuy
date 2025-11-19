@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	GinMode string
 	DBHost string
 	DBUser string
 	DBPass string
@@ -25,6 +26,7 @@ func LoadConfig() *Config {
 	}
 
 	cfg := &Config{
+		GinMode: os.Getenv("GIN_MODE"),
 		DBHost: os.Getenv("DB_HOST"),
 		DBUser: os.Getenv("DB_USER"),
 		DBPass: os.Getenv("DB_PASS"),

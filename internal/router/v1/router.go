@@ -1,4 +1,3 @@
-
 package router
 
 import (
@@ -9,7 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, workspaceHandler *handler.WorkspaceHandler, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
+func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, workspaceHandler *handler.WorkspaceHandler, projectHandler *handler.ProjectHandler, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
 	_ = db
 	if gin.Mode() == gin.DebugMode {
 		gin.SetMode(gin.DebugMode)
@@ -45,6 +44,17 @@ func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, workspaceHandler
 			workspaces.POST("/:workspaceID/members", workspaceHandler.InviteMember)
 			workspaces.PATCH("/:workspaceID/members/:memberID", workspaceHandler.UpdateMemberRole)
 			workspaces.DELETE("/:workspaceID/members/:userID", workspaceHandler.RemoveMember)
+
+			workspaces.POST("/:workspaceID/projects", projectHandler.CreateProject)
+			workspaces.GET("/:workspaceID/projects", projectHandler.ListProjects)
+		}
+
+		// Project endpoints 
+		projects := api.Group("/projects")
+		projects.Use(authMiddleware.RequireAuth())
+		{
+			projects.PUT("/:projectID", projectHandler.UpdateProject)
+			projects.DELETE("/:projectID", projectHandler.DeleteProject)
 		}
 	}
 

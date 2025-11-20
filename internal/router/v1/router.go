@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
+func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, workspaceHandler *handler.WorkspaceHandler, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
 	_ = db
 	if gin.Mode() == gin.DebugMode {
 		gin.SetMode(gin.DebugMode)
@@ -31,6 +31,20 @@ func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, authMiddleware *
 			auth.GET("/oauth/:provider", authHandler.OAuthRedirect)
 			auth.GET("/oauth/:provider/callback", authHandler.OAuthCallback)
 			auth.GET("/me", authMiddleware.RequireAuth(), authHandler.Me)
+		}
+
+		// Workspace endpoints
+		workspaces := api.Group("/workspaces")
+		workspaces.Use(authMiddleware.RequireAuth())
+		{
+			workspaces.POST("", workspaceHandler.CreateWorkspace)
+			workspaces.GET("", workspaceHandler.ListWorkspaces)
+			workspaces.PUT("/:workspaceID", workspaceHandler.UpdateWorkspace)
+
+			workspaces.GET("/:workspaceID/members", workspaceHandler.ListMembers)
+			workspaces.POST("/:workspaceID/members", workspaceHandler.InviteMember)
+			workspaces.PATCH("/:workspaceID/members/:memberID", workspaceHandler.UpdateMemberRole)
+			workspaces.DELETE("/:workspaceID/members/:userID", workspaceHandler.RemoveMember)
 		}
 	}
 

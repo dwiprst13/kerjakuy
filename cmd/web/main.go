@@ -25,6 +25,8 @@ func main() {
 
 	userRepo := repository.NewUserRepository(db)
 	sessionRepo := repository.NewUserSessionRepository(db)
+	workspaceRepo := repository.NewWorkspaceRepository(db)
+	workspaceMemberRepo := repository.NewWorkspaceMemberRepository(db)
 
 	userService := service.NewUserService(userRepo)
 	authService := authservice.NewService(userService, sessionRepo, authservice.Config{
@@ -34,6 +36,9 @@ func main() {
 		RefreshTokenTTL: cfg.RefreshTokenTTL,
 	})
 
+	workspaceService := service.NewWorkspaceService(workspaceRepo, workspaceMemberRepo)
+	workspaceHandler := handler.NewWorkspaceHandler(workspaceService, userService)
+
 	cookieMgr := authservice.NewCookieManager(authservice.CookieOptions{
 		AccessTTL:  cfg.AccessTokenTTL,
 		RefreshTTL: cfg.RefreshTokenTTL,
@@ -42,7 +47,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService, cookieMgr)
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
-	r := router.SetupRouter(db, authHandler, authMiddleware)
+	r := router.SetupRouter(db, authHandler, workspaceHandler, authMiddleware)
 
 	port := cfg.AppPort
 

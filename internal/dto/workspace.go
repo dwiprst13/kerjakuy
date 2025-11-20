@@ -18,7 +18,7 @@ type WorkspaceDTO struct {
 
 type CreateWorkspaceRequest struct {
 	Name string `json:"name" binding:"required,min=3,max=100"`
-	Slug string `json:"slug" binding:"required,alphanumdash,min=3,max=100"`
+	Slug string `json:"slug" binding:"required,min=3,max=100"`
 	Plan string `json:"plan" binding:"omitempty,oneof=free standard pro"`
 }
 

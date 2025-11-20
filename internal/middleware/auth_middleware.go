@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"kerjakuy/internal/service"
+	authservice "kerjakuy/internal/service/auth"
 )
 
 const (
@@ -15,10 +15,10 @@ const (
 )
 
 type AuthMiddleware struct {
-	authService service.AuthService
+	authService authservice.Service
 }
 
-func NewAuthMiddleware(authService service.AuthService) *AuthMiddleware {
+func NewAuthMiddleware(authService authservice.Service) *AuthMiddleware {
 	return &AuthMiddleware{authService: authService}
 }
 

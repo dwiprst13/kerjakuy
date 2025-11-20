@@ -10,6 +10,7 @@ import (
 	"kerjakuy/internal/middleware"
 	"kerjakuy/internal/repository"
 	"kerjakuy/internal/service"
+	authservice "kerjakuy/internal/service/auth"
 	"kerjakuy/pkg/config"
 	"kerjakuy/pkg/database"
 )
@@ -24,19 +25,29 @@ func main() {
 
 	userRepo := repository.NewUserRepository(db)
 	sessionRepo := repository.NewUserSessionRepository(db)
+	workspaceRepo := repository.NewWorkspaceRepository(db)
+	workspaceMemberRepo := repository.NewWorkspaceMemberRepository(db)
 
 	userService := service.NewUserService(userRepo)
-	authService := service.NewAuthService(userService, sessionRepo, service.AuthConfig{
+	authService := authservice.NewService(userService, sessionRepo, authservice.Config{
 		Secret:          cfg.JWTSecret,
 		Issuer:          cfg.JWTIssuer,
 		AccessTokenTTL:  cfg.AccessTokenTTL,
 		RefreshTokenTTL: cfg.RefreshTokenTTL,
 	})
 
-	authHandler := handler.NewAuthHandler(authService)
+	workspaceService := service.NewWorkspaceService(workspaceRepo, workspaceMemberRepo)
+	workspaceHandler := handler.NewWorkspaceHandler(workspaceService, userService)
+
+	cookieMgr := authservice.NewCookieManager(authservice.CookieOptions{
+		AccessTTL:  cfg.AccessTokenTTL,
+		RefreshTTL: cfg.RefreshTokenTTL,
+	})
+
+	authHandler := handler.NewAuthHandler(authService, cookieMgr)
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
-	r := router.SetupRouter(db, authHandler, authMiddleware)
+	r := router.SetupRouter(db, authHandler, workspaceHandler, authMiddleware)
 
 	port := cfg.AppPort
 

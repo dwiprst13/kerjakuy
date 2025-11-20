@@ -2,8 +2,6 @@
 package router
 
 import (
-	"net/http"
-
 	"kerjakuy/internal/handler"
 	"kerjakuy/internal/middleware"
 
@@ -11,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
+func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, workspaceHandler *handler.WorkspaceHandler, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
 	_ = db
 	if gin.Mode() == gin.DebugMode {
 		gin.SetMode(gin.DebugMode)
@@ -20,8 +18,10 @@ func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, authMiddleware *
 
 	api := router.Group("/api/v1")
 	{
+		// Ping endpoint
 		api.GET("/ping", handler.PingHandler)
 
+		// Auth endpoints
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", authHandler.Register)
@@ -30,16 +30,22 @@ func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, authMiddleware *
 			auth.POST("/logout", authHandler.Logout)
 			auth.GET("/oauth/:provider", authHandler.OAuthRedirect)
 			auth.GET("/oauth/:provider/callback", authHandler.OAuthCallback)
+			auth.GET("/me", authMiddleware.RequireAuth(), authHandler.Me)
 		}
 
-		api.GET("/auth/me", authMiddleware.RequireAuth(), func(c *gin.Context) {
-			userID, _ := middleware.GetUserID(c)
-			userEmail, _ := middleware.GetUserEmail(c)
-			c.JSON(http.StatusOK, gin.H{
-				"user_id": userID,
-				"email":   userEmail,
-			})
-		})
+		// Workspace endpoints
+		workspaces := api.Group("/workspaces")
+		workspaces.Use(authMiddleware.RequireAuth())
+		{
+			workspaces.POST("", workspaceHandler.CreateWorkspace)
+			workspaces.GET("", workspaceHandler.ListWorkspaces)
+			workspaces.PUT("/:workspaceID", workspaceHandler.UpdateWorkspace)
+
+			workspaces.GET("/:workspaceID/members", workspaceHandler.ListMembers)
+			workspaces.POST("/:workspaceID/members", workspaceHandler.InviteMember)
+			workspaces.PATCH("/:workspaceID/members/:memberID", workspaceHandler.UpdateMemberRole)
+			workspaces.DELETE("/:workspaceID/members/:userID", workspaceHandler.RemoveMember)
+		}
 	}
 
 	return router

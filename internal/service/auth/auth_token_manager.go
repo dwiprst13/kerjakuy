@@ -1,4 +1,4 @@
-package service
+package auth
 
 import (
 	"crypto/hmac"
@@ -13,9 +13,9 @@ import (
 )
 
 type tokenManager interface {
-	GenerateAccessToken(claims AuthClaims) (string, error)
-	GenerateRefreshToken(claims AuthClaims) (string, error)
-	ValidateToken(token string, expectedType string) (*AuthClaims, error)
+	GenerateAccessToken(claims Claims) (string, error)
+	GenerateRefreshToken(claims Claims) (string, error)
+	ValidateToken(token string, expectedType string) (*Claims, error)
 	AccessTTL() time.Duration
 	RefreshTTL() time.Duration
 }
@@ -36,11 +36,11 @@ type tokenPayload struct {
 	ExpiresAt int64  `json:"exp"`
 }
 
-func (m *simpleTokenManager) GenerateAccessToken(claims AuthClaims) (string, error) {
+func (m *simpleTokenManager) GenerateAccessToken(claims Claims) (string, error) {
 	return m.generateToken(claims, tokenTypeAccess, m.accessTTL)
 }
 
-func (m *simpleTokenManager) GenerateRefreshToken(claims AuthClaims) (string, error) {
+func (m *simpleTokenManager) GenerateRefreshToken(claims Claims) (string, error) {
 	return m.generateToken(claims, tokenTypeRefresh, m.refreshTTL)
 }
 
@@ -52,7 +52,7 @@ func (m *simpleTokenManager) RefreshTTL() time.Duration {
 	return m.refreshTTL
 }
 
-func (m *simpleTokenManager) generateToken(claims AuthClaims, tokenType string, ttl time.Duration) (string, error) {
+func (m *simpleTokenManager) generateToken(claims Claims, tokenType string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	payload := tokenPayload{
 		UserID:    claims.UserID.String(),
@@ -70,7 +70,7 @@ func (m *simpleTokenManager) generateToken(claims AuthClaims, tokenType string, 
 	return encodeSegment(payloadBytes) + "." + encodeSegment(signature), nil
 }
 
-func (m *simpleTokenManager) ValidateToken(token string, expectedType string) (*AuthClaims, error) {
+func (m *simpleTokenManager) ValidateToken(token string, expectedType string) (*Claims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
 		return nil, errors.New("token invalid")
@@ -108,7 +108,7 @@ func (m *simpleTokenManager) ValidateToken(token string, expectedType string) (*
 		return nil, errors.New("token payload invalid")
 	}
 
-	return &AuthClaims{
+	return &Claims{
 		UserID:    userID,
 		Email:     payload.Email,
 		ExpiresAt: time.Unix(payload.ExpiresAt, 0),

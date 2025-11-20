@@ -1,4 +1,4 @@
-package service
+package auth
 
 import (
 	"context"
@@ -21,41 +21,47 @@ const (
 
 var ErrOAuthProviderNotConfigured = errors.New("oauth provider belum dikonfigurasi")
 
-type AuthMetadata struct {
+type Metadata struct {
 	UserAgent string
 	IP        string
 }
 
-type AuthConfig struct {
+type Config struct {
 	Secret          string
 	Issuer          string
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
 }
 
-type AuthClaims struct {
+type Claims struct {
 	UserID    uuid.UUID
 	Email     string
 	ExpiresAt time.Time
 }
 
-type AuthService interface {
-	Register(ctx context.Context, req dto.CreateUserRequest, meta AuthMetadata) (*dto.AuthResponse, error)
-	Login(ctx context.Context, req dto.LoginRequest, meta AuthMetadata) (*dto.AuthResponse, error)
-	Refresh(ctx context.Context, refreshToken string, meta AuthMetadata) (*dto.AuthResponse, error)
+type Service interface {
+	Register(ctx context.Context, req dto.CreateUserRequest, meta Metadata) (*dto.AuthResponse, error)
+	Login(ctx context.Context, req dto.LoginRequest, meta Metadata) (*dto.AuthResponse, error)
+	Refresh(ctx context.Context, refreshToken string, meta Metadata) (*dto.AuthResponse, error)
 	Logout(ctx context.Context, refreshToken string) error
-	ValidateAccessToken(token string) (*AuthClaims, error)
+	ValidateAccessToken(token string) (*Claims, error)
 	BeginOAuth(ctx context.Context, provider, redirectURI string) (*dto.OAuthRedirectResponse, error)
-	HandleOAuthCallback(ctx context.Context, provider, code, state string, meta AuthMetadata) (*dto.AuthResponse, error)
+	HandleOAuthCallback(ctx context.Context, provider, code, state string, meta Metadata) (*dto.AuthResponse, error)
+}
+
+type userManager interface {
+	CreateWithPassword(ctx context.Context, req dto.CreateUserRequest) (*dto.UserDTO, error)
+	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*dto.UserDTO, error)
 }
 
 type authService struct {
-	userSvc     UserService
+	userSvc     userManager
 	sessionRepo repository.UserSessionRepository
 	tokens      tokenManager
 }
 
-func NewAuthService(userSvc UserService, sessionRepo repository.UserSessionRepository, cfg AuthConfig) AuthService {
+func NewService(userSvc userManager, sessionRepo repository.UserSessionRepository, cfg Config) Service {
 	tokenMgr := &simpleTokenManager{
 		secret:          []byte(cfg.Secret),
 		issuer:          cfg.Issuer,
@@ -69,7 +75,7 @@ func NewAuthService(userSvc UserService, sessionRepo repository.UserSessionRepos
 	}
 }
 
-func (s *authService) Register(ctx context.Context, req dto.CreateUserRequest, meta AuthMetadata) (*dto.AuthResponse, error) {
+func (s *authService) Register(ctx context.Context, req dto.CreateUserRequest, meta Metadata) (*dto.AuthResponse, error) {
 	userDTO, err := s.userSvc.CreateWithPassword(ctx, req)
 	if err != nil {
 		return nil, err
@@ -81,7 +87,7 @@ func (s *authService) Register(ctx context.Context, req dto.CreateUserRequest, m
 	return buildAuthResponse(userDTO, resp), nil
 }
 
-func (s *authService) Login(ctx context.Context, req dto.LoginRequest, meta AuthMetadata) (*dto.AuthResponse, error) {
+func (s *authService) Login(ctx context.Context, req dto.LoginRequest, meta Metadata) (*dto.AuthResponse, error) {
 	user, err := s.userSvc.GetByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, err
@@ -106,7 +112,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest, meta Auth
 	return buildAuthResponse(&userDTO, resp), nil
 }
 
-func (s *authService) Refresh(ctx context.Context, refreshToken string, meta AuthMetadata) (*dto.AuthResponse, error) {
+func (s *authService) Refresh(ctx context.Context, refreshToken string, meta Metadata) (*dto.AuthResponse, error) {
 	claims, err := s.tokens.ValidateToken(refreshToken, tokenTypeRefresh)
 	if err != nil {
 		return nil, err
@@ -146,7 +152,7 @@ func (s *authService) Logout(ctx context.Context, refreshToken string) error {
 	return s.sessionRepo.DeleteByID(ctx, session.ID)
 }
 
-func (s *authService) ValidateAccessToken(token string) (*AuthClaims, error) {
+func (s *authService) ValidateAccessToken(token string) (*Claims, error) {
 	return s.tokens.ValidateToken(token, tokenTypeAccess)
 }
 
@@ -171,12 +177,12 @@ func (s *authService) BeginOAuth(ctx context.Context, provider, redirectURI stri
 	}, nil
 }
 
-func (s *authService) HandleOAuthCallback(ctx context.Context, provider, code, state string, meta AuthMetadata) (*dto.AuthResponse, error) {
+func (s *authService) HandleOAuthCallback(ctx context.Context, provider, code, state string, meta Metadata) (*dto.AuthResponse, error) {
 	return nil, fmt.Errorf("%w: %s", ErrOAuthProviderNotConfigured, provider)
 }
 
-func (s *authService) issueTokens(ctx context.Context, userID uuid.UUID, email string, meta AuthMetadata) (*dto.AuthTokens, error) {
-	claims := AuthClaims{
+func (s *authService) issueTokens(ctx context.Context, userID uuid.UUID, email string, meta Metadata) (*dto.AuthTokens, error) {
+	claims := Claims{
 		UserID: userID,
 		Email:  email,
 	}
@@ -201,7 +207,7 @@ func (s *authService) issueTokens(ctx context.Context, userID uuid.UUID, email s
 	}, nil
 }
 
-func (s *authService) createSession(ctx context.Context, userID uuid.UUID, refreshToken string, meta AuthMetadata) error {
+func (s *authService) createSession(ctx context.Context, userID uuid.UUID, refreshToken string, meta Metadata) error {
 	userAgent := meta.UserAgent
 	ip := meta.IP
 	session := &models.UserSession{

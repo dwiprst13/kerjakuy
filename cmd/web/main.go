@@ -3,10 +3,15 @@ package main
 import (
 	"log"
 
-	"kerjakuy/internal/router/v1"
+	"github.com/gin-gonic/gin"
+	router "kerjakuy/internal/router/v1"
+
+	"kerjakuy/internal/handler"
+	"kerjakuy/internal/middleware"
+	"kerjakuy/internal/repository"
+	"kerjakuy/internal/service"
 	"kerjakuy/pkg/config"
 	"kerjakuy/pkg/database"
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -17,7 +22,21 @@ func main() {
 		gin.SetMode(cfg.GinMode)
 	}
 
-	r := router.SetupRouter(db)
+	userRepo := repository.NewUserRepository(db)
+	sessionRepo := repository.NewUserSessionRepository(db)
+
+	userService := service.NewUserService(userRepo)
+	authService := service.NewAuthService(userService, sessionRepo, service.AuthConfig{
+		Secret:          cfg.JWTSecret,
+		Issuer:          cfg.JWTIssuer,
+		AccessTokenTTL:  cfg.AccessTokenTTL,
+		RefreshTokenTTL: cfg.RefreshTokenTTL,
+	})
+
+	authHandler := handler.NewAuthHandler(authService)
+	authMiddleware := middleware.NewAuthMiddleware(authService)
+
+	r := router.SetupRouter(db, authHandler, authMiddleware)
 
 	port := cfg.AppPort
 

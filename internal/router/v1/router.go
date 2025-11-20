@@ -30,9 +30,8 @@ func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, authMiddleware *
 			auth.POST("/logout", authHandler.Logout)
 			auth.GET("/oauth/:provider", authHandler.OAuthRedirect)
 			auth.GET("/oauth/:provider/callback", authHandler.OAuthCallback)
+			auth.GET("/me", authMiddleware.RequireAuth(), authHandler.Me)
 		}
-
-		api.GET("/auth/me", authMiddleware.RequireAuth(), authHandler.Me)
 	}
 
 	return router

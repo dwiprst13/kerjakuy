@@ -10,6 +10,7 @@ import (
 	"kerjakuy/internal/middleware"
 	"kerjakuy/internal/repository"
 	"kerjakuy/internal/service"
+	authservice "kerjakuy/internal/service/auth"
 	"kerjakuy/pkg/config"
 	"kerjakuy/pkg/database"
 )
@@ -26,7 +27,7 @@ func main() {
 	sessionRepo := repository.NewUserSessionRepository(db)
 
 	userService := service.NewUserService(userRepo)
-	authService := service.NewAuthService(userService, sessionRepo, service.AuthConfig{
+	authService := authservice.NewService(userService, sessionRepo, authservice.Config{
 		Secret:          cfg.JWTSecret,
 		Issuer:          cfg.JWTIssuer,
 		AccessTokenTTL:  cfg.AccessTokenTTL,

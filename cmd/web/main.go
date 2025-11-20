@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"kerjakuy/internal/router"
+	"kerjakuy/internal/router/v1"
 	"kerjakuy/pkg/config"
 	"kerjakuy/pkg/database"
 	"github.com/gin-gonic/gin"

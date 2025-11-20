@@ -11,10 +11,14 @@ import (
 
 type AuthHandler struct {
 	authService authservice.Service
+	cookieMgr   authservice.CookieManager
 }
 
-func NewAuthHandler(authService authservice.Service) *AuthHandler {
-	return &AuthHandler{authService: authService}
+func NewAuthHandler(authService authservice.Service, cookieMgr authservice.CookieManager) *AuthHandler {
+	return &AuthHandler{
+		authService: authService,
+		cookieMgr:   cookieMgr,
+	}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -28,7 +32,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, resp)
+	h.handleAuthSuccess(c, http.StatusCreated, resp)
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -42,7 +46,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+	h.handleAuthSuccess(c, http.StatusOK, resp)
 }
 
 func (h *AuthHandler) Refresh(c *gin.Context) {
@@ -56,7 +60,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+	h.handleAuthSuccess(c, http.StatusOK, resp)
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
@@ -68,6 +72,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	if err := h.authService.Logout(c.Request.Context(), req.RefreshToken); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	if h.cookieMgr != nil {
+		h.cookieMgr.ClearTokens(c)
 	}
 	c.Status(http.StatusNoContent)
 }
@@ -108,4 +115,11 @@ func (h *AuthHandler) metadataFromContext(c *gin.Context) authservice.Metadata {
 		UserAgent: c.Request.UserAgent(),
 		IP:        c.ClientIP(),
 	}
+}
+
+func (h *AuthHandler) handleAuthSuccess(c *gin.Context, status int, resp *dto.AuthResponse) {
+	if h.cookieMgr != nil {
+		h.cookieMgr.SetTokens(c, resp.Tokens)
+	}
+	c.JSON(status, resp)
 }

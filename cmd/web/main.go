@@ -34,7 +34,12 @@ func main() {
 		RefreshTokenTTL: cfg.RefreshTokenTTL,
 	})
 
-	authHandler := handler.NewAuthHandler(authService)
+	cookieMgr := authservice.NewCookieManager(authservice.CookieOptions{
+		AccessTTL:  cfg.AccessTokenTTL,
+		RefreshTTL: cfg.RefreshTokenTTL,
+	})
+
+	authHandler := handler.NewAuthHandler(authService, cookieMgr)
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
 	r := router.SetupRouter(db, authHandler, authMiddleware)

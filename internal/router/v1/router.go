@@ -2,8 +2,6 @@
 package router
 
 import (
-	"net/http"
-
 	"kerjakuy/internal/handler"
 	"kerjakuy/internal/middleware"
 
@@ -20,8 +18,10 @@ func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, authMiddleware *
 
 	api := router.Group("/api/v1")
 	{
+		// Ping endpoint
 		api.GET("/ping", handler.PingHandler)
 
+		// Auth endpoints
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", authHandler.Register)
@@ -32,14 +32,7 @@ func SetupRouter(db *gorm.DB, authHandler *handler.AuthHandler, authMiddleware *
 			auth.GET("/oauth/:provider/callback", authHandler.OAuthCallback)
 		}
 
-		api.GET("/auth/me", authMiddleware.RequireAuth(), func(c *gin.Context) {
-			userID, _ := middleware.GetUserID(c)
-			userEmail, _ := middleware.GetUserEmail(c)
-			c.JSON(http.StatusOK, gin.H{
-				"user_id": userID,
-				"email":   userEmail,
-			})
-		})
+		api.GET("/auth/me", authMiddleware.RequireAuth(), authHandler.Me)
 	}
 
 	return router

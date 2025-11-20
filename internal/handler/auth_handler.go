@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"kerjakuy/internal/dto"
+	"kerjakuy/internal/middleware"
 	authservice "kerjakuy/internal/service/auth"
 )
 
@@ -122,4 +123,13 @@ func (h *AuthHandler) handleAuthSuccess(c *gin.Context, status int, resp *dto.Au
 		h.cookieMgr.SetTokens(c, resp.Tokens)
 	}
 	c.JSON(status, resp)
+}
+
+func (h *AuthHandler) Me(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	userEmail, _ := middleware.GetUserEmail(c)
+	c.JSON(http.StatusOK, gin.H{
+		"user_id": userID,
+		"email":   userEmail,
+	})
 }

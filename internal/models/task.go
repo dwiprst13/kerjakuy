@@ -17,7 +17,7 @@ type Task struct {
 	Position    int        `gorm:"default:0" json:"position"`
 	Priority    string     `gorm:"type:varchar(20);default:medium" json:"priority"`
 	DueDate     *time.Time `gorm:"column:due_date" json:"due_date,omitempty"`
-	Status      string     `gorm:"type:varchar(20);default:open" json:"status"`
+	Status      string     `gorm:"type:varchar(20);default:todo" json:"status"`
 	CreatedBy   uuid.UUID  `gorm:"type:uuid;column:created_by" json:"created_by"`
 	CompletedAt *time.Time `gorm:"column:completed_at" json:"completed_at,omitempty"`
 	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
@@ -26,5 +26,12 @@ type Task struct {
 
 func (t *Task) BeforeCreate(tx *gorm.DB) error {
 	t.ID = uuid.New()
+	// Ensure defaults align with DB constraints when zero values provided.
+	if t.Priority == "" {
+		t.Priority = "medium"
+	}
+	if t.Status == "" {
+		t.Status = "todo"
+	}
 	return nil
 }

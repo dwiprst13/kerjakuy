@@ -40,7 +40,7 @@ type UpdateTaskRequest struct {
 	Position    *int       `json:"position,omitempty"`
 	Priority    *string    `json:"priority,omitempty" binding:"omitempty,oneof=low medium high"`
 	DueDate     *time.Time `json:"due_date,omitempty"`
-	Status      *string    `json:"status,omitempty" binding:"omitempty,oneof=open in_progress done"`
+	Status      *string    `json:"status,omitempty" binding:"omitempty,oneof=todo in_progress done"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 }
 

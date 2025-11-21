@@ -47,7 +47,7 @@ func main() {
 	workspaceHandler := handler.NewWorkspaceHandler(workspaceService, userService)
 	projectService := service.NewProjectService(projectRepo, boardRepo, columnRepo)
 	projectHandler := handler.NewProjectHandler(projectService)
-	taskService := service.NewTaskService(taskRepo, taskAssigneeRepo, taskCommentRepo, attachmentRepo)
+	taskService := service.NewTaskService(taskRepo, taskAssigneeRepo, taskCommentRepo, attachmentRepo, boardRepo, columnRepo)
 	taskHandler := handler.NewTaskHandler(taskService)
 
 	cookieMgr := authservice.NewCookieManager(authservice.CookieOptions{

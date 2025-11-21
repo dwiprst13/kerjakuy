@@ -91,6 +91,10 @@ func (s *projectService) DeleteProject(ctx context.Context, projectID uuid.UUID)
 }
 
 func (s *projectService) CreateBoard(ctx context.Context, req dto.CreateBoardRequest) (*dto.BoardDTO, error) {
+	if _, err := s.projectRepo.FindByID(ctx, req.ProjectID); err != nil {
+		return nil, fmt.Errorf("project not found")
+	}
+
 	var position int
 	if req.Position != nil {
 		position = *req.Position
@@ -153,6 +157,10 @@ func (s *projectService) DeleteBoard(ctx context.Context, boardID uuid.UUID) err
 }
 
 func (s *projectService) CreateColumn(ctx context.Context, req dto.CreateColumnRequest) (*dto.ColumnDTO, error) {
+	if _, err := s.boardRepo.FindByID(ctx, req.BoardID); err != nil {
+		return nil, fmt.Errorf("board not found")
+	}
+
 	var position int
 	if req.Position != nil {
 		position = *req.Position

@@ -40,20 +40,20 @@ User dapat membuat workspace, mengelola project, task board (kanban), hingga ber
 
 ### Backend:
 - **Golang 1.22+**
-- **Gin / Fiber** (pilih sesuai preferensi, default: Gin)
+- **Gin** 
 - **GORM** ORM
 - **PostgreSQL**
 - **UUID primary key**
 - **Clean Folder Structure** (modular service layer)
 
-### Optional:
+### Maybe next step:
 - Redis (session cache / rate limit)
 - WebSocket (real-time chat)
 - S3-compatible storage (file upload)
 
 ---
 
-## Struktur Folder (Sederhana)
+## Struktur Folder 
 
 /cmd
 /server

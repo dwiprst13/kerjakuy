@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"kerjakuy/internal/dto"
@@ -33,13 +34,33 @@ func NewTaskService(taskRepo repository.TaskRepository, assigneeRepo repository.
 }
 
 func (s *taskService) CreateTask(ctx context.Context, req dto.CreateTaskRequest, createdBy uuid.UUID) (*dto.TaskDTO, error) {
+	if req.ColumnID == nil {
+		return nil, fmt.Errorf("column_id is required")
+	}
+	columnID := *req.ColumnID
+
+	position := 0
+	if req.Position != nil {
+		position = *req.Position
+		if position < 0 {
+			return nil, fmt.Errorf("position must be non-negative")
+		}
+	} else {
+		existing, err := s.taskRepo.ListByColumn(ctx, columnID)
+		if err != nil {
+			return nil, err
+		}
+		position = len(existing) + 1
+	}
+
 	task := &models.Task{
 		WorkspaceID: req.WorkspaceID,
 		ProjectID:   req.ProjectID,
-		ColumnID:    req.ColumnID,
+		ColumnID:    &columnID,
 		Title:       req.Title,
 		Description: req.Description,
 		CreatedBy:   createdBy,
+		Position:    position,
 	}
 	if req.Priority != nil {
 		task.Priority = *req.Priority
@@ -75,6 +96,9 @@ func (s *taskService) UpdateTask(ctx context.Context, taskID uuid.UUID, req dto.
 		task.Description = req.Description
 	}
 	if req.Position != nil {
+		if *req.Position < 0 {
+			return nil, fmt.Errorf("position must be non-negative")
+		}
 		task.Position = *req.Position
 	}
 	if req.Priority != nil {

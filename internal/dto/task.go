@@ -29,6 +29,7 @@ type CreateTaskRequest struct {
 	ColumnID    *uuid.UUID `json:"column_id,omitempty"`
 	Title       string     `json:"title" binding:"required,min=3,max=200"`
 	Description *string    `json:"description,omitempty"`
+	Position    *int       `json:"position,omitempty"`
 	Priority    *string    `json:"priority,omitempty" binding:"omitempty,oneof=low medium high"`
 	DueDate     *time.Time `json:"due_date,omitempty"`
 }
@@ -40,7 +41,7 @@ type UpdateTaskRequest struct {
 	Position    *int       `json:"position,omitempty"`
 	Priority    *string    `json:"priority,omitempty" binding:"omitempty,oneof=low medium high"`
 	DueDate     *time.Time `json:"due_date,omitempty"`
-	Status      *string    `json:"status,omitempty" binding:"omitempty,oneof=open in_progress done"`
+	Status      *string    `json:"status,omitempty" binding:"omitempty,oneof=todo in_progress done"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 }
 

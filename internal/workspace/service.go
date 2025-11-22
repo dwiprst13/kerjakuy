@@ -5,27 +5,36 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/google/uuid"
+	"kerjakuy/internal/auth"
 	"kerjakuy/internal/models"
+	"kerjakuy/internal/pkg/rbac"
+	"kerjakuy/internal/repository"
+
+	"github.com/google/uuid"
 )
 
 type WorkspaceService interface {
 	CreateWorkspace(ctx context.Context, ownerID uuid.UUID, req CreateWorkspaceRequest) (*WorkspaceDTO, error)
 	UpdateWorkspace(ctx context.Context, workspaceID uuid.UUID, req UpdateWorkspaceRequest) (*WorkspaceDTO, error)
 	ListOwnerWorkspaces(ctx context.Context, ownerID uuid.UUID) ([]WorkspaceDTO, error)
-	InviteMember(ctx context.Context, workspaceID uuid.UUID, userID uuid.UUID, role string) (*WorkspaceMemberDTO, error)
+	InviteMember(ctx context.Context, actorID uuid.UUID, workspaceID uuid.UUID, userID uuid.UUID, role string) (*WorkspaceMemberDTO, error)
 	ListMembers(ctx context.Context, workspaceID uuid.UUID) ([]WorkspaceMemberDTO, error)
-	UpdateMemberRole(ctx context.Context, memberID uuid.UUID, role string) error
-	RemoveMember(ctx context.Context, workspaceID, userID uuid.UUID) error
+	UpdateMemberRole(ctx context.Context, actorID uuid.UUID, workspaceID uuid.UUID, memberID uuid.UUID, role string) error
+	RemoveMember(ctx context.Context, actorID uuid.UUID, workspaceID uuid.UUID, userID uuid.UUID) error
 }
 
 type workspaceService struct {
-	workspaceRepo WorkspaceRepository
-	memberRepo    WorkspaceMemberRepository
+	workspaceRepo     WorkspaceRepository
+	memberRepo        repository.WorkspaceMemberRepository
+	permissionService auth.PermissionService
 }
 
-func NewWorkspaceService(workspaceRepo WorkspaceRepository, memberRepo WorkspaceMemberRepository) WorkspaceService {
-	return &workspaceService{workspaceRepo: workspaceRepo, memberRepo: memberRepo}
+func NewWorkspaceService(workspaceRepo WorkspaceRepository, memberRepo repository.WorkspaceMemberRepository, permissionService auth.PermissionService) WorkspaceService {
+	return &workspaceService{
+		workspaceRepo:     workspaceRepo,
+		memberRepo:        memberRepo,
+		permissionService: permissionService,
+	}
 }
 
 func (s *workspaceService) CreateWorkspace(ctx context.Context, ownerID uuid.UUID, req CreateWorkspaceRequest) (*WorkspaceDTO, error) {
@@ -56,6 +65,13 @@ func (s *workspaceService) CreateWorkspace(ctx context.Context, ownerID uuid.UUI
 }
 
 func (s *workspaceService) UpdateWorkspace(ctx context.Context, workspaceID uuid.UUID, req UpdateWorkspaceRequest) (*WorkspaceDTO, error) {
+	// TODO: Add RBAC check for UpdateWorkspace (needs actorID passed down)
+	// For now, let's focus on the member management as per plan, but ideally we should fix this too.
+	// The handler doesn't pass actorID to UpdateWorkspace yet.
+	// I will stick to the plan for member management first to avoid changing too many signatures at once,
+	// but I should really fix UpdateWorkspace too.
+	// Let's stick to the requested changes for now.
+
 	workspace, err := s.workspaceRepo.FindByID(ctx, workspaceID)
 	if err != nil {
 		return nil, err
@@ -86,7 +102,15 @@ func (s *workspaceService) ListOwnerWorkspaces(ctx context.Context, ownerID uuid
 	return result, nil
 }
 
-func (s *workspaceService) InviteMember(ctx context.Context, workspaceID uuid.UUID, userID uuid.UUID, role string) (*WorkspaceMemberDTO, error) {
+func (s *workspaceService) InviteMember(ctx context.Context, actorID uuid.UUID, workspaceID uuid.UUID, userID uuid.UUID, role string) (*WorkspaceMemberDTO, error) {
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, workspaceID, rbac.PermissionInviteMember)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, errors.New("permission denied")
+	}
+
 	if role == "" {
 		role = "member"
 	}
@@ -115,14 +139,29 @@ func (s *workspaceService) ListMembers(ctx context.Context, workspaceID uuid.UUI
 	return result, nil
 }
 
-func (s *workspaceService) UpdateMemberRole(ctx context.Context, memberID uuid.UUID, role string) error {
+func (s *workspaceService) UpdateMemberRole(ctx context.Context, actorID uuid.UUID, workspaceID uuid.UUID, memberID uuid.UUID, role string) error {
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, workspaceID, rbac.PermissionUpdateMember)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return errors.New("permission denied")
+	}
+
 	if role == "" {
 		return errors.New("role is required")
 	}
 	return s.memberRepo.UpdateRole(ctx, memberID, role)
 }
 
-func (s *workspaceService) RemoveMember(ctx context.Context, workspaceID, userID uuid.UUID) error {
+func (s *workspaceService) RemoveMember(ctx context.Context, actorID uuid.UUID, workspaceID, userID uuid.UUID) error {
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, workspaceID, rbac.PermissionRemoveMember)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return errors.New("permission denied")
+	}
 	return s.memberRepo.Remove(ctx, workspaceID, userID)
 }
 

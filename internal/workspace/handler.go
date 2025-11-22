@@ -3,10 +3,11 @@ package workspace
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"kerjakuy/internal/auth"
 	"kerjakuy/internal/user"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type WorkspaceHandler struct {
@@ -112,7 +113,13 @@ func (h *WorkspaceHandler) InviteMember(c *gin.Context) {
 		return
 	}
 
-	member, err := h.workspaceService.InviteMember(c.Request.Context(), workspaceID, user.ID, req.Role)
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	member, err := h.workspaceService.InviteMember(c.Request.Context(), actorID, workspaceID, user.ID, req.Role)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -122,6 +129,12 @@ func (h *WorkspaceHandler) InviteMember(c *gin.Context) {
 }
 
 func (h *WorkspaceHandler) UpdateMemberRole(c *gin.Context) {
+	workspaceID, err := uuid.Parse(c.Param("workspaceID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid workspace id"})
+		return
+	}
+
 	memberID, err := uuid.Parse(c.Param("memberID"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid member id"})
@@ -134,7 +147,13 @@ func (h *WorkspaceHandler) UpdateMemberRole(c *gin.Context) {
 		return
 	}
 
-	if err := h.workspaceService.UpdateMemberRole(c.Request.Context(), memberID, req.Role); err != nil {
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.workspaceService.UpdateMemberRole(c.Request.Context(), actorID, workspaceID, memberID, req.Role); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -155,7 +174,13 @@ func (h *WorkspaceHandler) RemoveMember(c *gin.Context) {
 		return
 	}
 
-	if err := h.workspaceService.RemoveMember(c.Request.Context(), workspaceID, userID); err != nil {
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.workspaceService.RemoveMember(c.Request.Context(), actorID, workspaceID, userID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

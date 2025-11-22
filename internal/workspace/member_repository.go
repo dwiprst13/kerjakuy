@@ -3,24 +3,19 @@ package workspace
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"kerjakuy/internal/models"
+	"kerjakuy/internal/repository"
+
+	"github.com/google/uuid"
 
 	"gorm.io/gorm"
 )
-
-type WorkspaceMemberRepository interface {
-	Add(ctx context.Context, member *models.WorkspaceMember) error
-	UpdateRole(ctx context.Context, memberID uuid.UUID, role string) error
-	ListByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]models.WorkspaceMember, error)
-	Remove(ctx context.Context, workspaceID, userID uuid.UUID) error
-}
 
 type workspaceMemberRepository struct {
 	db *gorm.DB
 }
 
-func NewWorkspaceMemberRepository(db *gorm.DB) WorkspaceMemberRepository {
+func NewWorkspaceMemberRepository(db *gorm.DB) repository.WorkspaceMemberRepository {
 	return &workspaceMemberRepository{db: db}
 }
 
@@ -42,4 +37,12 @@ func (r *workspaceMemberRepository) ListByWorkspace(ctx context.Context, workspa
 
 func (r *workspaceMemberRepository) Remove(ctx context.Context, workspaceID, userID uuid.UUID) error {
 	return r.db.WithContext(ctx).Where("workspace_id = ? AND user_id = ?", workspaceID, userID).Delete(&models.WorkspaceMember{}).Error
+}
+
+func (r *workspaceMemberRepository) FindByUserAndWorkspace(ctx context.Context, userID, workspaceID uuid.UUID) (*models.WorkspaceMember, error) {
+	var member models.WorkspaceMember
+	if err := r.db.WithContext(ctx).Where("user_id = ? AND workspace_id = ?", userID, workspaceID).First(&member).Error; err != nil {
+		return nil, err
+	}
+	return &member, nil
 }

@@ -4,36 +4,53 @@ import (
 	"context"
 	"errors"
 
-	"github.com/google/uuid"
+	"kerjakuy/internal/auth"
 	"kerjakuy/internal/models"
+	"kerjakuy/internal/pkg/rbac"
+
+	"github.com/google/uuid"
 )
 
 type ProjectService interface {
 	CreateProject(ctx context.Context, req CreateProjectRequest, createdBy uuid.UUID) (*ProjectDTO, error)
-	UpdateProject(ctx context.Context, projectID uuid.UUID, req UpdateProjectRequest) (*ProjectDTO, error)
-	DeleteProject(ctx context.Context, projectID uuid.UUID) error
+	UpdateProject(ctx context.Context, actorID uuid.UUID, projectID uuid.UUID, req UpdateProjectRequest) (*ProjectDTO, error)
+	DeleteProject(ctx context.Context, actorID uuid.UUID, projectID uuid.UUID) error
 	ListWorkspaceProjects(ctx context.Context, workspaceID uuid.UUID) ([]ProjectDTO, error)
-	CreateBoard(ctx context.Context, req CreateBoardRequest) (*BoardDTO, error)
+	CreateBoard(ctx context.Context, actorID uuid.UUID, req CreateBoardRequest) (*BoardDTO, error)
 	ListBoards(ctx context.Context, projectID uuid.UUID) ([]BoardDTO, error)
-	UpdateBoard(ctx context.Context, boardID uuid.UUID, req UpdateBoardRequest) (*BoardDTO, error)
-	DeleteBoard(ctx context.Context, boardID uuid.UUID) error
-	CreateColumn(ctx context.Context, req CreateColumnRequest) (*ColumnDTO, error)
+	UpdateBoard(ctx context.Context, actorID uuid.UUID, boardID uuid.UUID, req UpdateBoardRequest) (*BoardDTO, error)
+	DeleteBoard(ctx context.Context, actorID uuid.UUID, boardID uuid.UUID) error
+	CreateColumn(ctx context.Context, actorID uuid.UUID, req CreateColumnRequest) (*ColumnDTO, error)
 	ListColumns(ctx context.Context, boardID uuid.UUID) ([]ColumnDTO, error)
-	UpdateColumn(ctx context.Context, columnID uuid.UUID, req UpdateColumnRequest) (*ColumnDTO, error)
-	DeleteColumn(ctx context.Context, columnID uuid.UUID) error
+	UpdateColumn(ctx context.Context, actorID uuid.UUID, columnID uuid.UUID, req UpdateColumnRequest) (*ColumnDTO, error)
+	DeleteColumn(ctx context.Context, actorID uuid.UUID, columnID uuid.UUID) error
 }
 
 type projectService struct {
-	projectRepo ProjectRepository
-	boardRepo   BoardRepository
-	columnRepo  ColumnRepository
+	projectRepo       ProjectRepository
+	boardRepo         BoardRepository
+	columnRepo        ColumnRepository
+	permissionService auth.PermissionService
 }
 
-func NewProjectService(projectRepo ProjectRepository, boardRepo BoardRepository, columnRepo ColumnRepository) ProjectService {
-	return &projectService{projectRepo: projectRepo, boardRepo: boardRepo, columnRepo: columnRepo}
+func NewProjectService(projectRepo ProjectRepository, boardRepo BoardRepository, columnRepo ColumnRepository, permissionService auth.PermissionService) ProjectService {
+	return &projectService{
+		projectRepo:       projectRepo,
+		boardRepo:         boardRepo,
+		columnRepo:        columnRepo,
+		permissionService: permissionService,
+	}
 }
 
 func (s *projectService) CreateProject(ctx context.Context, req CreateProjectRequest, createdBy uuid.UUID) (*ProjectDTO, error) {
+	allowed, err := s.permissionService.HasPermission(ctx, createdBy, req.WorkspaceID, rbac.PermissionCreateProject)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, errors.New("permission denied")
+	}
+
 	project := &models.Project{
 		WorkspaceID: req.WorkspaceID,
 		Name:        req.Name,
@@ -48,10 +65,18 @@ func (s *projectService) CreateProject(ctx context.Context, req CreateProjectReq
 	return mapProjectToDTO(project), nil
 }
 
-func (s *projectService) UpdateProject(ctx context.Context, projectID uuid.UUID, req UpdateProjectRequest) (*ProjectDTO, error) {
+func (s *projectService) UpdateProject(ctx context.Context, actorID uuid.UUID, projectID uuid.UUID, req UpdateProjectRequest) (*ProjectDTO, error) {
 	project, err := s.projectRepo.FindByID(ctx, projectID)
 	if err != nil {
 		return nil, err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, project.WorkspaceID, rbac.PermissionUpdateProject)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, errors.New("permission denied")
 	}
 
 	if req.Name != nil {
@@ -73,7 +98,20 @@ func (s *projectService) UpdateProject(ctx context.Context, projectID uuid.UUID,
 	return mapProjectToDTO(project), nil
 }
 
-func (s *projectService) DeleteProject(ctx context.Context, projectID uuid.UUID) error {
+func (s *projectService) DeleteProject(ctx context.Context, actorID uuid.UUID, projectID uuid.UUID) error {
+	project, err := s.projectRepo.FindByID(ctx, projectID)
+	if err != nil {
+		return err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, project.WorkspaceID, rbac.PermissionDeleteProject)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return errors.New("permission denied")
+	}
+
 	return s.projectRepo.Delete(ctx, projectID)
 }
 
@@ -89,7 +127,20 @@ func (s *projectService) ListWorkspaceProjects(ctx context.Context, workspaceID 
 	return result, nil
 }
 
-func (s *projectService) CreateBoard(ctx context.Context, req CreateBoardRequest) (*BoardDTO, error) {
+func (s *projectService) CreateBoard(ctx context.Context, actorID uuid.UUID, req CreateBoardRequest) (*BoardDTO, error) {
+	project, err := s.projectRepo.FindByID(ctx, req.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, project.WorkspaceID, rbac.PermissionCreateBoard)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, errors.New("permission denied")
+	}
+
 	board := &models.Board{
 		ProjectID: req.ProjectID,
 		Name:      req.Name,
@@ -117,10 +168,23 @@ func (s *projectService) ListBoards(ctx context.Context, projectID uuid.UUID) ([
 	return result, nil
 }
 
-func (s *projectService) UpdateBoard(ctx context.Context, boardID uuid.UUID, req UpdateBoardRequest) (*BoardDTO, error) {
+func (s *projectService) UpdateBoard(ctx context.Context, actorID uuid.UUID, boardID uuid.UUID, req UpdateBoardRequest) (*BoardDTO, error) {
 	board, err := s.boardRepo.FindByID(ctx, boardID)
 	if err != nil {
 		return nil, err
+	}
+
+	project, err := s.projectRepo.FindByID(ctx, board.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, project.WorkspaceID, rbac.PermissionUpdateBoard)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, errors.New("permission denied")
 	}
 
 	if req.Name != nil {
@@ -136,13 +200,47 @@ func (s *projectService) UpdateBoard(ctx context.Context, boardID uuid.UUID, req
 	return mapBoardToDTO(board), nil
 }
 
-func (s *projectService) DeleteBoard(ctx context.Context, boardID uuid.UUID) error {
+func (s *projectService) DeleteBoard(ctx context.Context, actorID uuid.UUID, boardID uuid.UUID) error {
+	board, err := s.boardRepo.FindByID(ctx, boardID)
+	if err != nil {
+		return err
+	}
+
+	project, err := s.projectRepo.FindByID(ctx, board.ProjectID)
+	if err != nil {
+		return err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, project.WorkspaceID, rbac.PermissionDeleteBoard)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return errors.New("permission denied")
+	}
+
 	return s.boardRepo.Delete(ctx, boardID)
 }
 
-func (s *projectService) CreateColumn(ctx context.Context, req CreateColumnRequest) (*ColumnDTO, error) {
-	if _, err := s.boardRepo.FindByID(ctx, req.BoardID); err != nil {
+func (s *projectService) CreateColumn(ctx context.Context, actorID uuid.UUID, req CreateColumnRequest) (*ColumnDTO, error) {
+	board, err := s.boardRepo.FindByID(ctx, req.BoardID)
+	if err != nil {
 		return nil, errors.New("board not found")
+	}
+
+	project, err := s.projectRepo.FindByID(ctx, board.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, project.WorkspaceID, rbac.PermissionCreateBoard) 
+
+	allowed, err = s.permissionService.HasPermission(ctx, actorID, project.WorkspaceID, rbac.PermissionUpdateBoard)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, errors.New("permission denied")
 	}
 
 	column := &models.Column{
@@ -176,10 +274,27 @@ func (s *projectService) ListColumns(ctx context.Context, boardID uuid.UUID) ([]
 	return result, nil
 }
 
-func (s *projectService) UpdateColumn(ctx context.Context, columnID uuid.UUID, req UpdateColumnRequest) (*ColumnDTO, error) {
+func (s *projectService) UpdateColumn(ctx context.Context, actorID uuid.UUID, columnID uuid.UUID, req UpdateColumnRequest) (*ColumnDTO, error) {
 	column, err := s.columnRepo.FindByID(ctx, columnID)
 	if err != nil {
 		return nil, err
+	}
+
+	board, err := s.boardRepo.FindByID(ctx, column.BoardID)
+	if err != nil {
+		return nil, err
+	}
+	project, err := s.projectRepo.FindByID(ctx, board.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, project.WorkspaceID, rbac.PermissionUpdateBoard)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, errors.New("permission denied")
 	}
 
 	if req.Name != nil {
@@ -195,7 +310,29 @@ func (s *projectService) UpdateColumn(ctx context.Context, columnID uuid.UUID, r
 	return mapColumnToDTO(column), nil
 }
 
-func (s *projectService) DeleteColumn(ctx context.Context, columnID uuid.UUID) error {
+func (s *projectService) DeleteColumn(ctx context.Context, actorID uuid.UUID, columnID uuid.UUID) error {
+	column, err := s.columnRepo.FindByID(ctx, columnID)
+	if err != nil {
+		return err
+	}
+
+	board, err := s.boardRepo.FindByID(ctx, column.BoardID)
+	if err != nil {
+		return err
+	}
+	project, err := s.projectRepo.FindByID(ctx, board.ProjectID)
+	if err != nil {
+		return err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, project.WorkspaceID, rbac.PermissionUpdateBoard)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return errors.New("permission denied")
+	}
+
 	return s.columnRepo.Delete(ctx, columnID)
 }
 

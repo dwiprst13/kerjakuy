@@ -4,17 +4,20 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
+	"kerjakuy/internal/auth"
 	"kerjakuy/internal/models"
+	"kerjakuy/internal/pkg/rbac"
 	"kerjakuy/internal/project"
+
+	"github.com/google/uuid"
 )
 
 type Service interface {
 	CreateTask(ctx context.Context, req CreateTaskRequest, createdBy uuid.UUID) (*TaskDTO, error)
-	UpdateTask(ctx context.Context, taskID uuid.UUID, req UpdateTaskRequest) (*TaskDTO, error)
-	DeleteTask(ctx context.Context, taskID uuid.UUID) error
+	UpdateTask(ctx context.Context, actorID uuid.UUID, taskID uuid.UUID, req UpdateTaskRequest) (*TaskDTO, error)
+	DeleteTask(ctx context.Context, actorID uuid.UUID, taskID uuid.UUID) error
 	ListTasksByColumn(ctx context.Context, columnID uuid.UUID) ([]TaskDTO, error)
-	UpdateAssignees(ctx context.Context, taskID uuid.UUID, req UpdateTaskAssigneesRequest) ([]TaskAssigneeDTO, error)
+	UpdateAssignees(ctx context.Context, actorID uuid.UUID, taskID uuid.UUID, req UpdateTaskAssigneesRequest) ([]TaskAssigneeDTO, error)
 	AddComment(ctx context.Context, req CreateTaskCommentRequest, userID uuid.UUID) (*TaskCommentDTO, error)
 	ListComments(ctx context.Context, taskID uuid.UUID) ([]TaskCommentDTO, error)
 	AddAttachment(ctx context.Context, req CreateAttachmentRequest, uploadedBy uuid.UUID) (*AttachmentDTO, error)
@@ -22,19 +25,36 @@ type Service interface {
 }
 
 type taskService struct {
-	taskRepo       TaskRepository
-	assigneeRepo   TaskAssigneeRepository
-	commentRepo    TaskCommentRepository
-	attachmentRepo AttachmentRepository
-	boardRepo      project.BoardRepository
-	columnRepo     project.ColumnRepository
+	taskRepo          TaskRepository
+	assigneeRepo      TaskAssigneeRepository
+	commentRepo       TaskCommentRepository
+	attachmentRepo    AttachmentRepository
+	boardRepo         project.BoardRepository
+	columnRepo        project.ColumnRepository
+	permissionService auth.PermissionService
 }
 
-func NewService(taskRepo TaskRepository, assigneeRepo TaskAssigneeRepository, commentRepo TaskCommentRepository, attachmentRepo AttachmentRepository, boardRepo project.BoardRepository, columnRepo project.ColumnRepository) Service {
-	return &taskService{taskRepo: taskRepo, assigneeRepo: assigneeRepo, commentRepo: commentRepo, attachmentRepo: attachmentRepo, boardRepo: boardRepo, columnRepo: columnRepo}
+func NewService(taskRepo TaskRepository, assigneeRepo TaskAssigneeRepository, commentRepo TaskCommentRepository, attachmentRepo AttachmentRepository, boardRepo project.BoardRepository, columnRepo project.ColumnRepository, permissionService auth.PermissionService) Service {
+	return &taskService{
+		taskRepo:          taskRepo,
+		assigneeRepo:      assigneeRepo,
+		commentRepo:       commentRepo,
+		attachmentRepo:    attachmentRepo,
+		boardRepo:         boardRepo,
+		columnRepo:        columnRepo,
+		permissionService: permissionService,
+	}
 }
 
 func (s *taskService) CreateTask(ctx context.Context, req CreateTaskRequest, createdBy uuid.UUID) (*TaskDTO, error) {
+	allowed, err := s.permissionService.HasPermission(ctx, createdBy, req.WorkspaceID, rbac.PermissionCreateTask)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("permission denied")
+	}
+
 	if req.ColumnID == nil {
 		return nil, fmt.Errorf("column_id is required")
 	}
@@ -94,11 +114,20 @@ func (s *taskService) CreateTask(ctx context.Context, req CreateTaskRequest, cre
 	return mapTaskToDTO(task), nil
 }
 
-func (s *taskService) UpdateTask(ctx context.Context, taskID uuid.UUID, req UpdateTaskRequest) (*TaskDTO, error) {
+func (s *taskService) UpdateTask(ctx context.Context, actorID uuid.UUID, taskID uuid.UUID, req UpdateTaskRequest) (*TaskDTO, error) {
 	task, err := s.taskRepo.FindByID(ctx, taskID)
 	if err != nil {
 		return nil, err
 	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, task.WorkspaceID, rbac.PermissionUpdateTask)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("permission denied")
+	}
+
 	if req.ColumnID != nil {
 		columnID := *req.ColumnID
 		column, err := s.columnRepo.FindByID(ctx, columnID)
@@ -145,7 +174,20 @@ func (s *taskService) UpdateTask(ctx context.Context, taskID uuid.UUID, req Upda
 	return mapTaskToDTO(task), nil
 }
 
-func (s *taskService) DeleteTask(ctx context.Context, taskID uuid.UUID) error {
+func (s *taskService) DeleteTask(ctx context.Context, actorID uuid.UUID, taskID uuid.UUID) error {
+	task, err := s.taskRepo.FindByID(ctx, taskID)
+	if err != nil {
+		return err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, task.WorkspaceID, rbac.PermissionDeleteTask)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return fmt.Errorf("permission denied")
+	}
+
 	return s.taskRepo.Delete(ctx, taskID)
 }
 
@@ -161,7 +203,20 @@ func (s *taskService) ListTasksByColumn(ctx context.Context, columnID uuid.UUID)
 	return result, nil
 }
 
-func (s *taskService) UpdateAssignees(ctx context.Context, taskID uuid.UUID, req UpdateTaskAssigneesRequest) ([]TaskAssigneeDTO, error) {
+func (s *taskService) UpdateAssignees(ctx context.Context, actorID uuid.UUID, taskID uuid.UUID, req UpdateTaskAssigneesRequest) ([]TaskAssigneeDTO, error) {
+	task, err := s.taskRepo.FindByID(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, actorID, task.WorkspaceID, rbac.PermissionUpdateTask)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("permission denied")
+	}
+
 	assignees := make([]models.TaskAssignee, 0, len(req.UserIDs))
 	for _, userID := range req.UserIDs {
 		assignees = append(assignees, models.TaskAssignee{
@@ -190,6 +245,22 @@ func (s *taskService) UpdateAssignees(ctx context.Context, taskID uuid.UUID, req
 }
 
 func (s *taskService) AddComment(ctx context.Context, req CreateTaskCommentRequest, userID uuid.UUID) (*TaskCommentDTO, error) {
+	// Check if user has access to task (via workspace)
+	task, err := s.taskRepo.FindByID(ctx, req.TaskID)
+	if err != nil {
+		return nil, err
+	}
+	// Assuming any member can comment? Or use PermissionUpdateTask?
+	// Let's use PermissionUpdateTask for now, or maybe a separate PermissionCommentTask.
+	// rbac.go doesn't have PermissionCommentTask. I'll use PermissionUpdateTask.
+	allowed, err := s.permissionService.HasPermission(ctx, userID, task.WorkspaceID, rbac.PermissionUpdateTask)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("permission denied")
+	}
+
 	comment := &models.TaskComment{
 		TaskID:  req.TaskID,
 		UserID:  userID,
@@ -226,6 +297,19 @@ func (s *taskService) ListComments(ctx context.Context, taskID uuid.UUID) ([]Tas
 }
 
 func (s *taskService) AddAttachment(ctx context.Context, req CreateAttachmentRequest, uploadedBy uuid.UUID) (*AttachmentDTO, error) {
+	task, err := s.taskRepo.FindByID(ctx, req.TaskID)
+	if err != nil {
+		return nil, err
+	}
+
+	allowed, err := s.permissionService.HasPermission(ctx, uploadedBy, task.WorkspaceID, rbac.PermissionUpdateTask)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("permission denied")
+	}
+
 	attachment := &models.Attachment{
 		TaskID:     req.TaskID,
 		UploadedBy: uploadedBy,

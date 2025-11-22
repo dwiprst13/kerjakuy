@@ -3,9 +3,10 @@ package project
 import (
 	"net/http"
 
+	"kerjakuy/internal/auth"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"kerjakuy/internal/auth"
 )
 
 type ProjectHandler struct {
@@ -34,7 +35,6 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// Path always wins over body-provided workspace_id to avoid cross-workspace creation.
 	req.WorkspaceID = workspaceID
 
 	project, err := h.projectService.CreateProject(c.Request.Context(), req, createdBy)
@@ -75,7 +75,13 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 		return
 	}
 
-	project, err := h.projectService.UpdateProject(c.Request.Context(), projectID, req)
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	project, err := h.projectService.UpdateProject(c.Request.Context(), actorID, projectID, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -91,7 +97,13 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 		return
 	}
 
-	if err := h.projectService.DeleteProject(c.Request.Context(), projectID); err != nil {
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.projectService.DeleteProject(c.Request.Context(), actorID, projectID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -113,7 +125,13 @@ func (h *ProjectHandler) CreateBoard(c *gin.Context) {
 	}
 	req.ProjectID = projectID
 
-	board, err := h.projectService.CreateBoard(c.Request.Context(), req)
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	board, err := h.projectService.CreateBoard(c.Request.Context(), actorID, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -151,7 +169,13 @@ func (h *ProjectHandler) UpdateBoard(c *gin.Context) {
 		return
 	}
 
-	board, err := h.projectService.UpdateBoard(c.Request.Context(), boardID, req)
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	board, err := h.projectService.UpdateBoard(c.Request.Context(), actorID, boardID, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -167,7 +191,13 @@ func (h *ProjectHandler) DeleteBoard(c *gin.Context) {
 		return
 	}
 
-	if err := h.projectService.DeleteBoard(c.Request.Context(), boardID); err != nil {
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.projectService.DeleteBoard(c.Request.Context(), actorID, boardID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -189,7 +219,13 @@ func (h *ProjectHandler) CreateColumn(c *gin.Context) {
 	}
 	req.BoardID = boardID
 
-	column, err := h.projectService.CreateColumn(c.Request.Context(), req)
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	column, err := h.projectService.CreateColumn(c.Request.Context(), actorID, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -227,7 +263,13 @@ func (h *ProjectHandler) UpdateColumn(c *gin.Context) {
 		return
 	}
 
-	column, err := h.projectService.UpdateColumn(c.Request.Context(), columnID, req)
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	column, err := h.projectService.UpdateColumn(c.Request.Context(), actorID, columnID, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -243,7 +285,13 @@ func (h *ProjectHandler) DeleteColumn(c *gin.Context) {
 		return
 	}
 
-	if err := h.projectService.DeleteColumn(c.Request.Context(), columnID); err != nil {
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.projectService.DeleteColumn(c.Request.Context(), actorID, columnID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

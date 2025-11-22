@@ -3,9 +3,10 @@ package task
 import (
 	"net/http"
 
+	"kerjakuy/internal/auth"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"kerjakuy/internal/auth"
 )
 
 type TaskHandler struct {
@@ -74,7 +75,13 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		return
 	}
 
-	task, err := h.taskService.UpdateTask(c.Request.Context(), taskID, req)
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	task, err := h.taskService.UpdateTask(c.Request.Context(), actorID, taskID, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -90,7 +97,13 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 		return
 	}
 
-	if err := h.taskService.DeleteTask(c.Request.Context(), taskID); err != nil {
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.taskService.DeleteTask(c.Request.Context(), actorID, taskID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -111,7 +124,13 @@ func (h *TaskHandler) UpdateAssignees(c *gin.Context) {
 		return
 	}
 
-	assignees, err := h.taskService.UpdateAssignees(c.Request.Context(), taskID, req)
+	actorID, ok := auth.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	assignees, err := h.taskService.UpdateAssignees(c.Request.Context(), actorID, taskID, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

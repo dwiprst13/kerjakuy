@@ -1,0 +1,625 @@
+openapi: 3.0.3
+info:
+  title: Kerjakuy API
+  version: 0.1.0
+  description: REST API for auth, workspace, project/board/task.
+servers:
+  - url: http://localhost:8080
+    description: Local dev
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    AuthTokens:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+    Workspace:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Project:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        color: { type: string, nullable: true }
+        is_archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Board:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        name: { type: string }
+        position: { type: integer }
+        created_at: { type: string, format: date-time }
+    Column:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        board_id: { type: string, format: uuid }
+        name: { type: string }
+        position: { type: integer }
+        created_at: { type: string, format: date-time }
+    Task:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        column_id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        position: { type: integer }
+        priority: { type: string, enum: [low, medium, high] }
+        status: { type: string, enum: [todo, in_progress, done] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/auth/register:
+    post:
+      summary: Register user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "201": { description: Registered }
+  /api/v1/auth/login:
+    post:
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200":
+          description: Tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    $ref: "#/components/schemas/AuthTokens"
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "200": { description: Refreshed }
+  /api/v1/auth/logout:
+    post:
+      summary: Logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "204": { description: Logged out }
+  /api/v1/auth/me:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Current user
+      responses:
+        "200": { description: Current user }
+  /api/v1/workspaces:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List workspaces
+      responses:
+        "200":
+          description: Workspaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Workspace" }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Create workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, slug, plan]
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                plan: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Workspace" } } } }
+  /api/v1/workspaces/{workspaceID}:
+    put:
+      security: [{ bearerAuth: [] }]
+      summary: Update workspace
+      parameters:
+        - in: path
+          name: workspaceID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                plan: { type: string }
+      responses:
+        "200": { description: Updated }
+  /api/v1/workspaces/{workspaceID}/members:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List members
+      parameters:
+        - in: path
+          name: workspaceID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "200": { description: Members }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Invite member
+      parameters:
+        - in: path
+          name: workspaceID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email: { type: string, format: email }
+                role: { type: string }
+      responses:
+        "201": { description: Invited }
+  /api/v1/workspaces/{workspaceID}/members/{memberID}:
+    patch:
+      security: [{ bearerAuth: [] }]
+      summary: Update member role
+      parameters:
+        - in: path
+          name: workspaceID
+          schema: { type: string, format: uuid }
+          required: true
+        - in: path
+          name: memberID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string }
+      responses:
+        "204": { description: Updated }
+  /api/v1/workspaces/{workspaceID}/members/{userID}:
+    delete:
+      security: [{ bearerAuth: [] }]
+      summary: Remove member
+      parameters:
+        - in: path
+          name: workspaceID
+          schema: { type: string, format: uuid }
+          required: true
+        - in: path
+          name: userID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "204": { description: Removed }
+  /api/v1/workspaces/{workspaceID}/projects:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List projects by workspace
+      parameters:
+        - in: path
+          name: workspaceID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Project" }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Create project
+      parameters:
+        - in: path
+          name: workspaceID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                color: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } }
+  /api/v1/projects/{projectID}:
+    put:
+      security: [{ bearerAuth: [] }]
+      summary: Update project
+      parameters:
+        - in: path
+          name: projectID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                color: { type: string }
+                is_archived: { type: boolean }
+      responses:
+        "200": { description: Updated }
+    delete:
+      security: [{ bearerAuth: [] }]
+      summary: Delete project
+      parameters:
+        - in: path
+          name: projectID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "204": { description: Deleted }
+  /api/v1/projects/{projectID}/boards:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List boards
+      parameters:
+        - in: path
+          name: projectID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "200":
+          description: Boards
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Board" }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Create board
+      parameters:
+        - in: path
+          name: projectID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                position: { type: integer }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Board" } } } }
+  /api/v1/boards/{boardID}:
+    put:
+      security: [{ bearerAuth: [] }]
+      summary: Update board
+      parameters:
+        - in: path
+          name: boardID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                position: { type: integer }
+      responses:
+        "200": { description: Updated }
+    delete:
+      security: [{ bearerAuth: [] }]
+      summary: Delete board
+      parameters:
+        - in: path
+          name: boardID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "204": { description: Deleted }
+  /api/v1/boards/{boardID}/columns:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List columns
+      parameters:
+        - in: path
+          name: boardID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "200":
+          description: Columns
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Column" }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Create column
+      parameters:
+        - in: path
+          name: boardID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                position: { type: integer }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Column" } } } }
+  /api/v1/columns/{columnID}:
+    put:
+      security: [{ bearerAuth: [] }]
+      summary: Update column
+      parameters:
+        - in: path
+          name: columnID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                position: { type: integer }
+      responses:
+        "200": { description: Updated }
+    delete:
+      security: [{ bearerAuth: [] }]
+      summary: Delete column
+      parameters:
+        - in: path
+          name: columnID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "204": { description: Deleted }
+  /api/v1/columns/{columnID}/tasks:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List tasks
+      parameters:
+        - in: path
+          name: columnID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Task" }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Create task
+      parameters:
+        - in: path
+          name: columnID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspace_id, project_id, title]
+              properties:
+                workspace_id: { type: string, format: uuid }
+                project_id: { type: string, format: uuid }
+                column_id: { type: string, format: uuid }
+                title: { type: string }
+                description: { type: string }
+                priority: { type: string, enum: [low, medium, high] }
+                position: { type: integer }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Task" } } } }
+  /api/v1/tasks/{taskID}:
+    put:
+      security: [{ bearerAuth: [] }]
+      summary: Update task
+      parameters:
+        - in: path
+          name: taskID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+                column_id: { type: string, format: uuid }
+                position: { type: integer }
+                priority: { type: string, enum: [low, medium, high] }
+                status: { type: string, enum: [todo, in_progress, done] }
+      responses:
+        "200": { description: Updated }
+    delete:
+      security: [{ bearerAuth: [] }]
+      summary: Delete task
+      parameters:
+        - in: path
+          name: taskID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "204": { description: Deleted }
+  /api/v1/tasks/{taskID}/assignees:
+    put:
+      security: [{ bearerAuth: [] }]
+      summary: Replace task assignees
+      parameters:
+        - in: path
+          name: taskID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_ids]
+              properties:
+                user_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200": { description: Assignees updated }
+  /api/v1/tasks/{taskID}/comments:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List comments
+      parameters:
+        - in: path
+          name: taskID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "200": { description: Comments }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Add comment
+      parameters:
+        - in: path
+          name: taskID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        "201": { description: Created }
+  /api/v1/tasks/{taskID}/attachments:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List attachments
+      parameters:
+        - in: path
+          name: taskID
+          schema: { type: string, format: uuid }
+          required: true
+      responses:
+        "200": { description: Attachments }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Add attachment
+      parameters:
+        - in: path
+          name: taskID
+          schema: { type: string, format: uuid }
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_name, file_url]
+              properties:
+                file_name: { type: string }
+                file_url: { type: string, format: uri }
+                file_size: { type: integer }
+                mime_type: { type: string }
+      responses:
+        "201": { description: Created }

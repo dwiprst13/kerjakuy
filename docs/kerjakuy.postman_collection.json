@@ -1,0 +1,583 @@
+{
+  "info": {
+    "name": "Kerjakuy API",
+    "description": "Collection untuk menguji endpoint Kerjakuy API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.1.0"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/auth/register", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "register"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Dwi Prasetia\",\n  \"email\": \"dwiprast13@gmail.com\",\n  \"password\": \"rahasia123\"\n}" }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', body.tokens?.access_token || '');",
+                  "pm.collectionVariables.set('refresh_token', body.tokens?.refresh_token || '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/auth/login", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"dwiprast13@gmail.com\",\n  \"password\": \"rahasia123\"\n}" }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(!pm.collectionVariables.get('refresh_token')) {",
+                  "  throw new Error('refresh_token belum tersedia. Jalankan request Login terlebih dahulu.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', body.tokens?.access_token || '');",
+                  "pm.collectionVariables.set('refresh_token', body.tokens?.refresh_token || pm.collectionVariables.get('refresh_token'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/auth/refresh", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "refresh"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}" }
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(!pm.collectionVariables.get('refresh_token')) {",
+                  "  throw new Error('refresh_token belum tersedia. Jalankan request Login terlebih dahulu.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset('access_token');",
+                  "pm.collectionVariables.unset('refresh_token');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/auth/logout", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "logout"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}" }
+          }
+        },
+        {
+          "name": "Me (Protected)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(!pm.collectionVariables.get('access_token')) {",
+                  "  throw new Error('access_token belum tersedia. Jalankan request Login terlebih dahulu.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/auth/me", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "me"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workspaces",
+      "item": [
+        {
+          "name": "List Workspaces",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong - jalankan auth login terlebih dahulu');"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/workspaces", "host": ["{{base_url}}"], "path": ["api", "v1", "workspaces"] }
+          }
+        },
+        {
+          "name": "Create Workspace",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } },
+            { "listen": "test", "script": { "exec": ["const data = pm.response.json();", "pm.collectionVariables.set('workspace_id', data.id || pm.collectionVariables.get('workspace_id'));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Workspace Demo\",\n  \"slug\": \"workspace-demo\",\n  \"plan\": \"free\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/workspaces", "host": ["{{base_url}}"], "path": ["api", "v1", "workspaces"] }
+          }
+        },
+        {
+          "name": "Update Workspace",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('workspace_id')) throw new Error('workspace_id kosong - jalankan Create Workspace atau set manual');"] } }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Workspace Demo Updated\",\n  \"plan\": \"standard\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/workspaces/{{workspace_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "workspaces", "{{workspace_id}}"] }
+          }
+        },
+        {
+          "name": "List Members",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('workspace_id')) throw new Error('workspace_id kosong');"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/workspaces/{{workspace_id}}/members", "host": ["{{base_url}}"], "path": ["api", "v1", "workspaces", "{{workspace_id}}", "members"] }
+          }
+        },
+        {
+          "name": "Invite Member",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('workspace_id')) throw new Error('workspace_id kosong');"] } },
+            { "listen": "test", "script": { "exec": ["const member = pm.response.json();", "pm.collectionVariables.set('member_id', member.id || pm.collectionVariables.get('member_id'));", "pm.collectionVariables.set('member_user_id', member.user_id || pm.collectionVariables.get('member_user_id'));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"invitee@example.com\",\n  \"role\": \"member\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/workspaces/{{workspace_id}}/members", "host": ["{{base_url}}"], "path": ["api", "v1", "workspaces", "{{workspace_id}}", "members"] }
+          }
+        },
+        {
+          "name": "Update Member Role",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('member_id')) throw new Error('member_id belum terset');", "if(!pm.collectionVariables.get('workspace_id')) throw new Error('workspace_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"admin\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/workspaces/{{workspace_id}}/members/{{member_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "workspaces", "{{workspace_id}}", "members", "{{member_id}}"] }
+          }
+        },
+        {
+          "name": "Remove Member",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('workspace_id')) throw new Error('workspace_id kosong');", "if(!pm.collectionVariables.get('member_user_id')) throw new Error('member_user_id kosong - jalankan Invite Member terlebih dahulu');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/workspaces/{{workspace_id}}/members/{{member_user_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "workspaces", "{{workspace_id}}", "members", "{{member_user_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "List Projects (by Workspace)",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('workspace_id')) throw new Error('workspace_id kosong');"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/workspaces/{{workspace_id}}/projects", "host": ["{{base_url}}"], "path": ["api", "v1", "workspaces", "{{workspace_id}}", "projects"] }
+          }
+        },
+        {
+          "name": "Create Project",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('workspace_id')) throw new Error('workspace_id kosong');"] } },
+            { "listen": "test", "script": { "exec": ["const project = pm.response.json();", "pm.collectionVariables.set('project_id', project.id || pm.collectionVariables.get('project_id'));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"workspace_id\": \"{{workspace_id}}\",\n  \"name\": \"Project Demo\",\n  \"description\": \"Sample project\",\n  \"color\": \"#0088ff\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/workspaces/{{workspace_id}}/projects", "host": ["{{base_url}}"], "path": ["api", "v1", "workspaces", "{{workspace_id}}", "projects"] }
+          }
+        },
+        {
+          "name": "Update Project",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('project_id')) throw new Error('project_id kosong');"] } }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Project Demo Updated\",\n  \"description\": \"Updated desc\",\n  \"color\": \"#ff9900\",\n  \"is_archived\": false\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}"] }
+          }
+        },
+        {
+          "name": "Delete Project",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('project_id')) throw new Error('project_id kosong');"] } },
+            { "listen": "test", "script": { "exec": ["pm.collectionVariables.unset('project_id');"] } }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Boards",
+      "item": [
+        {
+          "name": "List Boards (by Project)",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('project_id')) throw new Error('project_id kosong');"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/boards", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "boards"] }
+          }
+        },
+        {
+          "name": "Create Board",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('project_id')) throw new Error('project_id kosong');"] } },
+            { "listen": "test", "script": { "exec": ["const board = pm.response.json();", "pm.collectionVariables.set('board_id', board.id || pm.collectionVariables.get('board_id'));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"name\": \"Backlog\",\n  \"position\": 1\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/boards", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "boards"] }
+          }
+        },
+        {
+          "name": "Update Board",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('board_id')) throw new Error('board_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"In Progress\",\n  \"position\": 2\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/boards/{{board_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "boards", "{{board_id}}"] }
+          }
+        },
+        {
+          "name": "Delete Board",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('board_id')) throw new Error('board_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } },
+            { "listen": "test", "script": { "exec": ["pm.collectionVariables.unset('board_id');"] } }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/boards/{{board_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "boards", "{{board_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Columns",
+      "item": [
+        {
+          "name": "List Columns (by Board)",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('board_id')) throw new Error('board_id kosong');"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/boards/{{board_id}}/columns", "host": ["{{base_url}}"], "path": ["api", "v1", "boards", "{{board_id}}", "columns"] }
+          }
+        },
+        {
+          "name": "Create Column",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('board_id')) throw new Error('board_id kosong');"] } },
+            { "listen": "test", "script": { "exec": ["const column = pm.response.json();", "pm.collectionVariables.set('column_id', column.id || pm.collectionVariables.get('column_id'));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"board_id\": \"{{board_id}}\",\n  \"name\": \"To Do\",\n  \"position\": 1\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/boards/{{board_id}}/columns", "host": ["{{base_url}}"], "path": ["api", "v1", "boards", "{{board_id}}", "columns"] }
+          }
+        },
+        {
+          "name": "Update Column",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('column_id')) throw new Error('column_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Done\",\n  \"position\": 3\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/columns/{{column_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "columns", "{{column_id}}"] }
+          }
+        },
+        {
+          "name": "Delete Column",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('column_id')) throw new Error('column_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } },
+            { "listen": "test", "script": { "exec": ["pm.collectionVariables.unset('column_id');"] } }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/columns/{{column_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "columns", "{{column_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "List Tasks (by Column)",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('column_id')) throw new Error('column_id kosong');"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/columns/{{column_id}}/tasks", "host": ["{{base_url}}"], "path": ["api", "v1", "columns", "{{column_id}}", "tasks"] }
+          }
+        },
+        {
+          "name": "Create Task",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');", "if(!pm.collectionVariables.get('column_id')) throw new Error('column_id kosong');", "if(!pm.collectionVariables.get('project_id')) throw new Error('project_id kosong');", "if(!pm.collectionVariables.get('workspace_id')) throw new Error('workspace_id kosong');"] } },
+            { "listen": "test", "script": { "exec": ["const task = pm.response.json();", "pm.collectionVariables.set('task_id', task.id || pm.collectionVariables.get('task_id'));"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"workspace_id\": \"{{workspace_id}}\",\n  \"project_id\": \"{{project_id}}\",\n  \"column_id\": \"{{column_id}}\",\n  \"title\": \"Buat endpoint task\",\n  \"description\": \"Implementasi CRUD task\",\n  \"priority\": \"high\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/columns/{{column_id}}/tasks", "host": ["{{base_url}}"], "path": ["api", "v1", "columns", "{{column_id}}", "tasks"] }
+          }
+        },
+        {
+          "name": "Update Task",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('task_id')) throw new Error('task_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+          "body": { "mode": "raw", "raw": "{\n  \"title\": \"Buat endpoint task (updated)\",\n  \"description\": \"Update dan pindah kolom\",\n  \"priority\": \"medium\",\n  \"status\": \"in_progress\",\n  \"position\": 2\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/tasks/{{task_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}"] }
+          }
+        },
+        {
+          "name": "Delete Task",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('task_id')) throw new Error('task_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } },
+            { "listen": "test", "script": { "exec": ["pm.collectionVariables.unset('task_id');"] } }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/tasks/{{task_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}"] }
+          }
+        },
+        {
+          "name": "Update Assignees",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('task_id')) throw new Error('task_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"user_ids\": [\n    \"{{member_user_id}}\"\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/tasks/{{task_id}}/assignees", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "assignees"] }
+          }
+        },
+        {
+          "name": "Add Comment",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('task_id')) throw new Error('task_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"task_id\": \"{{task_id}}\",\n  \"content\": \"Komentar pertama\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/tasks/{{task_id}}/comments", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "comments"] }
+          }
+        },
+        {
+          "name": "List Comments",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('task_id')) throw new Error('task_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/tasks/{{task_id}}/comments", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "comments"] }
+          }
+        },
+        {
+          "name": "Add Attachment",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('task_id')) throw new Error('task_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"task_id\": \"{{task_id}}\",\n  \"file_name\": \"spec.pdf\",\n  \"file_url\": \"https://example.com/spec.pdf\",\n  \"file_size\": 12345,\n  \"mime_type\": \"application/pdf\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/tasks/{{task_id}}/attachments", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "attachments"] }
+          }
+        },
+        {
+          "name": "List Attachments",
+          "event": [
+            { "listen": "prerequest", "script": { "exec": ["if(!pm.collectionVariables.get('task_id')) throw new Error('task_id kosong');", "if(!pm.collectionVariables.get('access_token')) throw new Error('access_token kosong');"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/tasks/{{task_id}}/attachments", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "attachments"] }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "access_token", "value": "" },
+    { "key": "refresh_token", "value": "" },
+    { "key": "workspace_id", "value": "acdf9e5c-d690-4862-983a-53a33363c0da" },
+    { "key": "member_id", "value": "" },
+    { "key": "member_user_id", "value": "" },
+    { "key": "project_id", "value": "" },
+    { "key": "board_id", "value": "" },
+    { "key": "column_id", "value": "" },
+    { "key": "task_id", "value": "" }
+  ]
+}

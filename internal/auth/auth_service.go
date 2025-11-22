@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	"kerjakuy/internal/models"
 	"kerjakuy/internal/user"
+
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -61,7 +62,7 @@ type authService struct {
 }
 
 func NewService(userSvc userManager, sessionRepo UserSessionRepository, cfg Config) Service {
-	tokenMgr := &simpleTokenManager{
+	tokenMgr := &jwtTokenManager{
 		secret:     []byte(cfg.Secret),
 		issuer:     cfg.Issuer,
 		accessTTL:  cfg.AccessTokenTTL,

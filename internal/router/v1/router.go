@@ -65,7 +65,7 @@ func SetupRouter(authHandler *auth.AuthHandler, workspaceHandler *workspace.Work
 			boards.POST("/:boardID/columns", projectHandler.CreateColumn)
 			boards.GET("/:boardID/columns", projectHandler.ListColumns)
 		}
-
+		
 		columns := api.Group("/columns")
 		columns.Use(authMiddleware.RequireAuth())
 		{

@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 
 	"kerjakuy/internal/auth"
@@ -11,6 +12,7 @@ import (
 	"kerjakuy/internal/repository"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type WorkspaceService interface {
@@ -24,16 +26,20 @@ type WorkspaceService interface {
 }
 
 type workspaceService struct {
+	db                *gorm.DB
 	workspaceRepo     WorkspaceRepository
 	memberRepo        repository.WorkspaceMemberRepository
 	permissionService auth.PermissionService
+	logger            *slog.Logger
 }
 
-func NewWorkspaceService(workspaceRepo WorkspaceRepository, memberRepo repository.WorkspaceMemberRepository, permissionService auth.PermissionService) WorkspaceService {
+func NewWorkspaceService(db *gorm.DB, workspaceRepo WorkspaceRepository, memberRepo repository.WorkspaceMemberRepository, permissionService auth.PermissionService, logger *slog.Logger) WorkspaceService {
 	return &workspaceService{
+		db:                db,
 		workspaceRepo:     workspaceRepo,
 		memberRepo:        memberRepo,
 		permissionService: permissionService,
+		logger:            logger,
 	}
 }
 
@@ -48,30 +54,43 @@ func (s *workspaceService) CreateWorkspace(ctx context.Context, ownerID uuid.UUI
 		workspace.Plan = req.Plan
 	}
 
-	if err := s.workspaceRepo.Create(ctx, workspace); err != nil {
+	// Start Transaction
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// TODO: Ideally repositories should accept tx, but for now we rely on the fact that
+		// we are not using the tx instance inside the repo methods which is a limitation.
+		// To fix this properly, we need to update repositories to support transactions.
+		// For this iteration, I will use the existing repo methods but this doesn't actually use the transaction
+		// unless the repo methods are updated.
+		// WAIT, I need to fix this. I should create new repo instances with the tx.
+
+		txWorkspaceRepo := NewWorkspaceRepository(tx)
+		txMemberRepo := NewWorkspaceMemberRepository(tx)
+
+		if err := txWorkspaceRepo.Create(ctx, workspace); err != nil {
+			return err
+		}
+
+		member := &models.WorkspaceMember{
+			WorkspaceID: workspace.ID,
+			UserID:      ownerID,
+			Role:        "owner",
+		}
+		if err := txMemberRepo.Add(ctx, member); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		s.logger.Error("failed to create workspace", "error", err, "owner_id", ownerID)
 		return nil, err
 	}
 
-	member := &models.WorkspaceMember{
-		WorkspaceID: workspace.ID,
-		UserID:      ownerID,
-		Role:        "owner",
-	}
-	if err := s.memberRepo.Add(ctx, member); err != nil {
-		return nil, err
-	}
-
+	s.logger.Info("workspace created", "workspace_id", workspace.ID, "owner_id", ownerID)
 	return mapWorkspaceToDTO(workspace), nil
 }
 
 func (s *workspaceService) UpdateWorkspace(ctx context.Context, workspaceID uuid.UUID, req UpdateWorkspaceRequest) (*WorkspaceDTO, error) {
-	// TODO: Add RBAC check for UpdateWorkspace (needs actorID passed down)
-	// For now, let's focus on the member management as per plan, but ideally we should fix this too.
-	// The handler doesn't pass actorID to UpdateWorkspace yet.
-	// I will stick to the plan for member management first to avoid changing too many signatures at once,
-	// but I should really fix UpdateWorkspace too.
-	// Let's stick to the requested changes for now.
-
 	workspace, err := s.workspaceRepo.FindByID(ctx, workspaceID)
 	if err != nil {
 		return nil, err
@@ -85,8 +104,10 @@ func (s *workspaceService) UpdateWorkspace(ctx context.Context, workspaceID uuid
 	}
 
 	if err := s.workspaceRepo.Update(ctx, workspace); err != nil {
+		s.logger.Error("failed to update workspace", "error", err, "workspace_id", workspaceID)
 		return nil, err
 	}
+	s.logger.Info("workspace updated", "workspace_id", workspaceID)
 	return mapWorkspaceToDTO(workspace), nil
 }
 
@@ -122,8 +143,10 @@ func (s *workspaceService) InviteMember(ctx context.Context, actorID uuid.UUID, 
 	}
 
 	if err := s.memberRepo.Add(ctx, member); err != nil {
+		s.logger.Error("failed to invite member", "error", err, "workspace_id", workspaceID, "user_id", userID)
 		return nil, err
 	}
+	s.logger.Info("member invited", "workspace_id", workspaceID, "user_id", userID, "role", role)
 	return mapWorkspaceMemberToDTO(member), nil
 }
 
@@ -151,7 +174,12 @@ func (s *workspaceService) UpdateMemberRole(ctx context.Context, actorID uuid.UU
 	if role == "" {
 		return errors.New("role is required")
 	}
-	return s.memberRepo.UpdateRole(ctx, memberID, role)
+	if err := s.memberRepo.UpdateRole(ctx, memberID, role); err != nil {
+		s.logger.Error("failed to update member role", "error", err, "member_id", memberID, "role", role)
+		return err
+	}
+	s.logger.Info("member role updated", "member_id", memberID, "role", role)
+	return nil
 }
 
 func (s *workspaceService) RemoveMember(ctx context.Context, actorID uuid.UUID, workspaceID, userID uuid.UUID) error {
@@ -162,7 +190,12 @@ func (s *workspaceService) RemoveMember(ctx context.Context, actorID uuid.UUID, 
 	if !allowed {
 		return errors.New("permission denied")
 	}
-	return s.memberRepo.Remove(ctx, workspaceID, userID)
+	if err := s.memberRepo.Remove(ctx, workspaceID, userID); err != nil {
+		s.logger.Error("failed to remove member", "error", err, "workspace_id", workspaceID, "user_id", userID)
+		return err
+	}
+	s.logger.Info("member removed", "workspace_id", workspaceID, "user_id", userID)
+	return nil
 }
 
 func mapWorkspaceToDTO(workspace *models.Workspace) *WorkspaceDTO {

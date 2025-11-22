@@ -2,6 +2,8 @@ package app
 
 import (
 	"kerjakuy/internal/auth"
+	"kerjakuy/internal/middleware"
+	"kerjakuy/internal/pkg/logger"
 	"kerjakuy/internal/project"
 	"kerjakuy/internal/router/v1"
 	"kerjakuy/internal/task"
@@ -26,6 +28,7 @@ func (a *Application) BuildRouter() *gin.Engine {
 		gin.SetMode(a.cfg.GinMode)
 	}
 
+	logger := logger.New()
 	db := database.InitPostgresDB(a.cfg)
 
 	userRepo := user.NewUserRepository(db)
@@ -50,7 +53,7 @@ func (a *Application) BuildRouter() *gin.Engine {
 	workspaceRepo := workspace.NewWorkspaceRepository(db)
 	memberRepo := workspace.NewWorkspaceMemberRepository(db)
 	permissionService := auth.NewPermissionService(memberRepo)
-	workspaceService := workspace.NewWorkspaceService(workspaceRepo, memberRepo, permissionService)
+	workspaceService := workspace.NewWorkspaceService(db, workspaceRepo, memberRepo, permissionService, logger)
 	workspaceHandler := workspace.NewWorkspaceHandler(workspaceService, userService)
 
 	projectRepo := project.NewProjectRepository(db)
@@ -66,7 +69,13 @@ func (a *Application) BuildRouter() *gin.Engine {
 	taskService := task.NewService(taskRepo, assigneeRepo, commentRepo, attachmentRepo, boardRepo, columnRepo, permissionService)
 	taskHandler := task.NewTaskHandler(taskService)
 
-	return router.SetupRouter(authHandler, workspaceHandler, projectHandler, taskHandler, authMiddleware)
+	router := router.SetupRouter(authHandler, workspaceHandler, projectHandler, taskHandler, authMiddleware)
+
+	router.Use(middleware.LoggerMiddleware())
+	router.Use(middleware.CORSMiddleware())
+	router.Use(middleware.RateLimitMiddleware())
+
+	return router
 }
 
 func (a *Application) Run() error {

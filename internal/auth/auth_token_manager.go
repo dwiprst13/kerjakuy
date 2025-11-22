@@ -1,14 +1,11 @@
 package auth
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
-	"strings"
+	"fmt"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -20,111 +17,85 @@ type tokenManager interface {
 	RefreshTTL() time.Duration
 }
 
-type simpleTokenManager struct {
+type jwtTokenManager struct {
 	secret     []byte
 	issuer     string
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 }
 
-type tokenPayload struct {
+type jwtClaims struct {
 	UserID    string `json:"uid"`
 	Email     string `json:"email"`
-	Issuer    string `json:"iss"`
 	TokenType string `json:"typ"`
-	IssuedAt  int64  `json:"iat"`
-	ExpiresAt int64  `json:"exp"`
+	jwt.RegisteredClaims
 }
 
-func (m *simpleTokenManager) GenerateAccessToken(claims Claims) (string, error) {
+func (m *jwtTokenManager) GenerateAccessToken(claims Claims) (string, error) {
 	return m.generateToken(claims, tokenTypeAccess, m.accessTTL)
 }
 
-func (m *simpleTokenManager) GenerateRefreshToken(claims Claims) (string, error) {
+func (m *jwtTokenManager) GenerateRefreshToken(claims Claims) (string, error) {
 	return m.generateToken(claims, tokenTypeRefresh, m.refreshTTL)
 }
 
-func (m *simpleTokenManager) AccessTTL() time.Duration {
+func (m *jwtTokenManager) AccessTTL() time.Duration {
 	return m.accessTTL
 }
 
-func (m *simpleTokenManager) RefreshTTL() time.Duration {
+func (m *jwtTokenManager) RefreshTTL() time.Duration {
 	return m.refreshTTL
 }
 
-func (m *simpleTokenManager) generateToken(claims Claims, tokenType string, ttl time.Duration) (string, error) {
+func (m *jwtTokenManager) generateToken(claims Claims, tokenType string, ttl time.Duration) (string, error) {
 	now := time.Now()
-	payload := tokenPayload{
+	expiresAt := now.Add(ttl)
+
+	jClaims := jwtClaims{
 		UserID:    claims.UserID.String(),
 		Email:     claims.Email,
-		Issuer:    m.issuer,
 		TokenType: tokenType,
-		IssuedAt:  now.Unix(),
-		ExpiresAt: now.Add(ttl).Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    m.issuer,
+			Subject:   claims.UserID.String(),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+		},
 	}
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	signature := m.sign(payloadBytes)
-	return encodeSegment(payloadBytes) + "." + encodeSegment(signature), nil
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jClaims)
+	return token.SignedString(m.secret)
 }
 
-func (m *simpleTokenManager) ValidateToken(token string, expectedType string) (*Claims, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 2 {
-		return nil, errors.New("token invalid")
-	}
+func (m *jwtTokenManager) ValidateToken(tokenString string, expectedType string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return m.secret, nil
+	})
 
-	payloadBytes, err := decodeSegment(parts[0])
 	if err != nil {
-		return nil, errors.New("token invalid")
+		return nil, err
 	}
 
-	signature, err := decodeSegment(parts[1])
-	if err != nil {
-		return nil, errors.New("token invalid")
+	if claims, ok := token.Claims.(*jwtClaims); ok && token.Valid {
+		if claims.TokenType != expectedType {
+			return nil, errors.New("invalid token type")
+		}
+
+		userID, err := uuid.Parse(claims.UserID)
+		if err != nil {
+			return nil, errors.New("invalid user id in token")
+		}
+
+		return &Claims{
+			UserID:    userID,
+			Email:     claims.Email,
+			ExpiresAt: claims.ExpiresAt.Time,
+		}, nil
 	}
 
-	if !hmac.Equal(signature, m.sign(payloadBytes)) {
-		return nil, errors.New("token signature invalid")
-	}
-
-	var payload tokenPayload
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-		return nil, errors.New("token payload invalid")
-	}
-
-	if payload.TokenType != expectedType {
-		return nil, errors.New("token type mismatch")
-	}
-
-	if payload.ExpiresAt < time.Now().Unix() {
-		return nil, errors.New("token expired")
-	}
-
-	userID, err := uuid.Parse(payload.UserID)
-	if err != nil {
-		return nil, errors.New("token payload invalid")
-	}
-
-	return &Claims{
-		UserID:    userID,
-		Email:     payload.Email,
-		ExpiresAt: time.Unix(payload.ExpiresAt, 0),
-	}, nil
-}
-
-func (m *simpleTokenManager) sign(payload []byte) []byte {
-	mac := hmac.New(sha256.New, m.secret)
-	mac.Write(payload)
-	return mac.Sum(nil)
-}
-
-func encodeSegment(data []byte) string {
-	return base64.RawURLEncoding.EncodeToString(data)
-}
-
-func decodeSegment(segment string) ([]byte, error) {
-	return base64.RawURLEncoding.DecodeString(segment)
+	return nil, errors.New("invalid token")
 }

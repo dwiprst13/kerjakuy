@@ -27,10 +27,12 @@ type taskService struct {
 	assigneeRepo   repository.TaskAssigneeRepository
 	commentRepo    repository.TaskCommentRepository
 	attachmentRepo repository.AttachmentRepository
+	boardRepo      repository.BoardRepository
+	columnRepo     repository.ColumnRepository
 }
 
-func NewTaskService(taskRepo repository.TaskRepository, assigneeRepo repository.TaskAssigneeRepository, commentRepo repository.TaskCommentRepository, attachmentRepo repository.AttachmentRepository) TaskService {
-	return &taskService{taskRepo: taskRepo, assigneeRepo: assigneeRepo, commentRepo: commentRepo, attachmentRepo: attachmentRepo}
+func NewTaskService(taskRepo repository.TaskRepository, assigneeRepo repository.TaskAssigneeRepository, commentRepo repository.TaskCommentRepository, attachmentRepo repository.AttachmentRepository, boardRepo repository.BoardRepository, columnRepo repository.ColumnRepository) TaskService {
+	return &taskService{taskRepo: taskRepo, assigneeRepo: assigneeRepo, commentRepo: commentRepo, attachmentRepo: attachmentRepo, boardRepo: boardRepo, columnRepo: columnRepo}
 }
 
 func (s *taskService) CreateTask(ctx context.Context, req dto.CreateTaskRequest, createdBy uuid.UUID) (*dto.TaskDTO, error) {
@@ -38,6 +40,18 @@ func (s *taskService) CreateTask(ctx context.Context, req dto.CreateTaskRequest,
 		return nil, fmt.Errorf("column_id is required")
 	}
 	columnID := *req.ColumnID
+
+	column, err := s.columnRepo.FindByID(ctx, columnID)
+	if err != nil {
+		return nil, fmt.Errorf("column not found")
+	}
+	board, err := s.boardRepo.FindByID(ctx, column.BoardID)
+	if err != nil {
+		return nil, fmt.Errorf("board not found for column")
+	}
+	if board.ProjectID != req.ProjectID {
+		return nil, fmt.Errorf("column does not belong to project")
+	}
 
 	position := 0
 	if req.Position != nil {
@@ -87,7 +101,19 @@ func (s *taskService) UpdateTask(ctx context.Context, taskID uuid.UUID, req dto.
 		return nil, err
 	}
 	if req.ColumnID != nil {
-		task.ColumnID = req.ColumnID
+		columnID := *req.ColumnID
+		column, err := s.columnRepo.FindByID(ctx, columnID)
+		if err != nil {
+			return nil, fmt.Errorf("column not found")
+		}
+		board, err := s.boardRepo.FindByID(ctx, column.BoardID)
+		if err != nil {
+			return nil, fmt.Errorf("board not found for column")
+		}
+		if board.ProjectID != task.ProjectID {
+			return nil, fmt.Errorf("column does not belong to task project")
+		}
+		task.ColumnID = &columnID
 	}
 	if req.Title != nil {
 		task.Title = *req.Title

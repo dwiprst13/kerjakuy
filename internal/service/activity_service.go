@@ -1,12 +1,12 @@
 package service
 
 import (
-    "context"
+	"context"
 
-    "github.com/google/uuid"
-    "kerjakuy/internal/dto"
-    "kerjakuy/internal/models"
-    "kerjakuy/internal/repository"
+	"github.com/google/uuid"
+	"kerjakuy/internal/dto"
+	"kerjakuy/internal/models"
+	"kerjakuy/internal/project"
 )
 
 type ActivityService interface {
@@ -15,11 +15,11 @@ type ActivityService interface {
 }
 
 type activityService struct {
-    repo repository.ActivityLogRepository
+	repo project.ActivityLogRepository
 }
 
-func NewActivityService(repo repository.ActivityLogRepository) ActivityService {
-    return &activityService{repo: repo}
+func NewActivityService(repo project.ActivityLogRepository) ActivityService {
+	return &activityService{repo: repo}
 }
 
 func (s *activityService) Log(ctx context.Context, workspaceID uuid.UUID, payload models.ActivityLog) error {

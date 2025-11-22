@@ -1,12 +1,14 @@
 package app
 
 import (
-	authmodule "kerjakuy/internal/modules/auth"
-	projectmodule "kerjakuy/internal/modules/project"
-	taskmodule "kerjakuy/internal/modules/task"
-	usermodule "kerjakuy/internal/modules/user"
-	workspacemodule "kerjakuy/internal/modules/workspace"
-	routerv1 "kerjakuy/internal/router/v1"
+	"kerjakuy/internal/auth"
+	"kerjakuy/internal/middleware"
+	"kerjakuy/internal/pkg/logger"
+	"kerjakuy/internal/project"
+	"kerjakuy/internal/router/v1"
+	"kerjakuy/internal/task"
+	"kerjakuy/internal/user"
+	"kerjakuy/internal/workspace"
 	"kerjakuy/pkg/config"
 	"kerjakuy/pkg/database"
 
@@ -26,29 +28,54 @@ func (a *Application) BuildRouter() *gin.Engine {
 		gin.SetMode(a.cfg.GinMode)
 	}
 
+	logger := logger.New()
 	db := database.InitPostgresDB(a.cfg)
 
-	userModule := usermodule.NewModule(db)
-	authModule := authmodule.NewModule(a.cfg, db, authmodule.Dependencies{
-		UserService: userModule.Service(),
-	})
-	workspaceModule := workspacemodule.NewModule(db, workspacemodule.Dependencies{
-		UserService:    userModule.Service(),
-		AuthMiddleware: authModule.AuthMiddleware(),
-	})
-	projectModule := projectmodule.NewModule(db, projectmodule.Dependencies{
-		AuthMiddleware: authModule.AuthMiddleware(),
-	})
-	taskModule := taskmodule.NewModule(db, taskmodule.Dependencies{
-		AuthMiddleware: authModule.AuthMiddleware(),
+	userRepo := user.NewUserRepository(db)
+	userService := user.NewUserService(userRepo)
+
+	sessionRepo := auth.NewUserSessionRepository(db)
+	authService := auth.NewService(userService, sessionRepo, auth.Config{
+		Secret:          a.cfg.JWTSecret,
+		Issuer:          a.cfg.JWTIssuer,
+		AccessTokenTTL:  a.cfg.AccessTokenTTL,
+		RefreshTokenTTL: a.cfg.RefreshTokenTTL,
 	})
 
-	return routerv1.SetupRouter(routerv1.Modules{
-		Auth:      authModule,
-		Workspace: workspaceModule,
-		Project:   projectModule,
-		Task:      taskModule,
+	cookieMgr := auth.NewCookieManager(auth.CookieOptions{
+		AccessTTL:  a.cfg.AccessTokenTTL,
+		RefreshTTL: a.cfg.RefreshTokenTTL,
 	})
+
+	authHandler := auth.NewAuthHandler(authService, cookieMgr)
+	authMiddleware := auth.NewAuthMiddleware(authService)
+
+	workspaceRepo := workspace.NewWorkspaceRepository(db)
+	memberRepo := workspace.NewWorkspaceMemberRepository(db)
+	permissionService := auth.NewPermissionService(memberRepo)
+	workspaceService := workspace.NewWorkspaceService(db, workspaceRepo, memberRepo, permissionService, logger)
+	workspaceHandler := workspace.NewWorkspaceHandler(workspaceService, userService)
+
+	projectRepo := project.NewProjectRepository(db)
+	boardRepo := project.NewBoardRepository(db)
+	columnRepo := project.NewColumnRepository(db)
+	projectService := project.NewProjectService(projectRepo, boardRepo, columnRepo, permissionService)
+	projectHandler := project.NewProjectHandler(projectService)
+
+	taskRepo := task.NewTaskRepository(db)
+	assigneeRepo := task.NewTaskAssigneeRepository(db)
+	commentRepo := task.NewTaskCommentRepository(db)
+	attachmentRepo := task.NewAttachmentRepository(db)
+	taskService := task.NewService(taskRepo, assigneeRepo, commentRepo, attachmentRepo, boardRepo, columnRepo, permissionService)
+	taskHandler := task.NewTaskHandler(taskService)
+
+	router := router.SetupRouter(authHandler, workspaceHandler, projectHandler, taskHandler, authMiddleware)
+
+	router.Use(middleware.LoggerMiddleware())
+	router.Use(middleware.CORSMiddleware())
+	router.Use(middleware.RateLimitMiddleware())
+
+	return router
 }
 
 func (a *Application) Run() error {

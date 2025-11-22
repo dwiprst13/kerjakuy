@@ -80,6 +80,10 @@ main.go
 - v0.5: Chat realtime
 - v1.0: Billing + Production
 
+## API Docs
+<!-- - Postman: `docs/kerjakuy.postman_collection.json` -->
+- OpenAPI (Swagger): `docs/openapi.yaml` (import ke Swagger UI/Insomnia/Stoplight)
+
 ---
 
 Dikembangkan oleh **dwiprst13** — dibuat khusus agar lebih simpel, cepat, dan terjangkau dibanding SaaS project management lain.
